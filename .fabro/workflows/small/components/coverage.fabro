@@ -1,0 +1,13 @@
+// Component: coverage
+// Claude (opus) checks the branch diff for uncovered behaviour and adds tests.
+digraph Coverage {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  coverage [label="Coverage check (Claude opus)", class="claude opus verify",
+            backend="acp", acp.command="fidfab-claude-acp --model opus",
+            prompt="@prompts/coverage.md"]
+  done     [shape=diamond, label="Coverage checked"]
+
+  start -> coverage -> done -> exit
+}

@@ -1,0 +1,34 @@
+// fidfab: medium development implementation
+//
+// planning-with-files plan (Claude fable) → iterate with the human on
+// task_plan.md → implement the approved plan → verification pipeline →
+// PR → steward loop.
+digraph FidfabMedium {
+  graph [max_node_visits=50, label="fidfab medium"]
+
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  bootstrap [import="components/bootstrap.fabro"]
+  plan      [import="components/plan-with-files.fabro"]
+  implement [label="Implement approved plan (Claude fable)", class="claude fable implement",
+             backend="acp", acp.command="fidfab-claude-acp --model fable",
+             prompt="@components/prompts/implement-plan.md"]
+
+  has_changes [label="Branch has changes?", script="fidfab-diff --has-changes", output_schema="routing"]
+  coverage   [import="components/coverage.fabro"]
+  coderabbit [import="components/coderabbit-review.fabro"]
+  codex      [import="components/codex-review.fabro"]
+  claude     [import="components/claude-review.fabro"]
+  security   [import="components/security-review.fabro"]
+  personal   [import="components/personal-data-audit.fabro"]
+  ship       [import="components/commit-and-pr.fabro"]
+  steward    [import="components/pr-steward.fabro"]
+  done       [shape=diamond, label="Done"]
+
+  start -> bootstrap -> plan -> implement -> has_changes
+  has_changes -> coverage [label="has-changes"]
+  has_changes -> done     [label="no-changes"]
+  coverage -> coderabbit -> codex -> claude -> security -> personal -> ship -> steward -> done
+  done -> exit
+}

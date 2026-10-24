@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# fidfab-claude-acp — launch Claude Code as an ACP agent for a Fabro stage.
+#
+# Usage: fidfab-claude-acp [--model <alias|id>] [--effort <low|medium|high|max>]
+#
+# Model aliases:
+#   opus   -> ${FIDFAB_MODEL_OPUS:-opus}     (deep verification and fixing)
+#   fable  -> ${FIDFAB_MODEL_FABLE:-fable}   (planning, roadmaps, interactive work)
+#   sonnet -> ${FIDFAB_MODEL_SONNET:-sonnet}
+# Any other value is passed to Claude Code unchanged.
+#
+# Credentials come from the environment Fabro injects (CLAUDE_CODE_OAUTH_TOKEN
+# from `claude setup-token`, or ANTHROPIC_API_KEY). The adapter speaks ACP over
+# stdio, which Fabro drives.
+set -euo pipefail
+
+model=""
+effort=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --model)  model="$2"; shift 2 ;;
+    --effort) effort="$2"; shift 2 ;;
+    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    *) echo "fidfab-claude-acp: unknown argument $1" >&2; exit 64 ;;
+  esac
+done
+
+case "$model" in
+  opus)   model="${FIDFAB_MODEL_OPUS:-opus}" ;;
+  fable)  model="${FIDFAB_MODEL_FABLE:-fable}" ;;
+  sonnet) model="${FIDFAB_MODEL_SONNET:-sonnet}" ;;
+esac
+
+[[ -n "$model"  ]] && export ANTHROPIC_MODEL="$model"
+[[ -n "$effort" ]] && export CLAUDE_CODE_EFFORT_LEVEL="$effort"
+export IS_SANDBOX="${IS_SANDBOX:-1}"
+export DISABLE_AUTOUPDATER=1
+
+# Load refs recorded by fidfab-bootstrap so prompts can refer to them.
+[[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
+
+exec claude-agent-acp "$@"

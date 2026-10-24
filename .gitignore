@@ -1,0 +1,7 @@
+# fidfab run-time artifacts (also excluded inside sandboxes by fidfab-bootstrap)
+.fidfab/
+# local scratch
+*.log
+.DS_Store
+# rendered graphs are committed; ignore temporary renders
+docs/graphs/*.tmp.svg

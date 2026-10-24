@@ -1,0 +1,12 @@
+{
+  "hasCompletedOnboarding": true,
+  "theme": "dark",
+  "autoUpdates": false,
+  "mcpServers": {
+    "serena": {
+      "type": "stdio",
+      "command": "serena",
+      "args": ["start-mcp-server", "--context", "claude-code", "--project-from-cwd"]
+    }
+  }
+}

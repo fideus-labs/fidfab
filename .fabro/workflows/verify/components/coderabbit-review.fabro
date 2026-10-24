@@ -1,0 +1,31 @@
+// Component: coderabbit-review
+// CodeRabbit CLI review with autonomous fixes by Claude (opus) following the
+// code-review skill's "4. Fix Issues (Autonomous Workflow)". If CodeRabbit is
+// unavailable, wait 3 minutes and retry once; then fall back to Claude Code's
+// built-in code review.
+digraph CodeRabbitReview {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  check   [label="CodeRabbit available?",       script="fidfab-coderabbit available", retry_policy="none"]
+  wait    [label="Wait 3 minutes",              shape=insulator, duration="3m"]
+  recheck [label="CodeRabbit available? (retry)", script="fidfab-coderabbit available", retry_policy="none"]
+
+  review   [label="CodeRabbit review + fix (Claude opus)", class="claude opus review",
+            backend="acp", acp.command="fidfab-claude-acp --model opus",
+            prompt="@prompts/coderabbit-review-fix.md"]
+  fallback [label="Built-in review + fix (Claude opus)", class="claude opus review",
+            backend="acp", acp.command="fidfab-claude-acp --model opus",
+            prompt="@prompts/claude-builtin-review.md"]
+  done     [shape=diamond, label="Code review done"]
+
+  start -> check
+  check   -> wait     [condition="outcome=failed"]
+  check   -> review
+  wait    -> recheck
+  recheck -> fallback [condition="outcome=failed"]
+  recheck -> review
+  review   -> done
+  fallback -> done
+  done -> exit
+}

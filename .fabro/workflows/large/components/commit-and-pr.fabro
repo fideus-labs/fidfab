@@ -1,0 +1,18 @@
+// Component: commit-and-pr
+// Claude (opus) writes a descriptive commit, pushes, opens the PR with
+// `gh pr create --fill`, then rewrites the title and body from an analysis of
+// the branch.
+digraph CommitAndPR {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  commit [label="Commit (Claude opus)", class="claude opus git",
+          backend="acp", acp.command="fidfab-claude-acp --model opus",
+          prompt="@prompts/commit.md"]
+  pr     [label="Pull request (Claude opus)", class="claude opus git",
+          backend="acp", acp.command="fidfab-claude-acp --model opus",
+          prompt="@prompts/pull-request.md"]
+  done   [shape=diamond, label="PR opened"]
+
+  start -> commit -> pr -> done -> exit
+}

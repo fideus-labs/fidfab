@@ -1,0 +1,11 @@
+# Fabro project configuration for the fidfab repository itself.
+#
+# Workflows live in .fabro/workflows/<name>/ and are discovered by name:
+#   fabro run small --goal "…"
+# Canonical components live in components/ and are vendored into each
+# workflow directory by scripts/sync-components.sh.
+_version = 1
+
+[project]
+name = "fidfab"
+description = "The enlightened computational science factory for expert research software engineers"

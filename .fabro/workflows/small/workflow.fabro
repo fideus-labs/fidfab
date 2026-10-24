@@ -1,0 +1,35 @@
+// fidfab: small development implementation
+//
+// One-shot prompt → Claude Code (fable) implements with a lightweight
+// planning-with-files record → verification pipeline → PR → steward loop.
+//
+// The verification pipeline is spelled out explicitly (one import per stage)
+// so the whole process is readable here and each component stays reusable.
+digraph FidfabSmall {
+  graph [max_node_visits=50, label="fidfab small"]
+
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  bootstrap [import="components/bootstrap.fabro"]
+  implement [label="Implement (Claude fable)", class="claude fable implement",
+             backend="acp", acp.command="fidfab-claude-acp --model fable",
+             prompt="@components/prompts/implement-small.md"]
+
+  has_changes [label="Branch has changes?", script="fidfab-diff --has-changes", output_schema="routing"]
+  coverage   [import="components/coverage.fabro"]
+  coderabbit [import="components/coderabbit-review.fabro"]
+  codex      [import="components/codex-review.fabro"]
+  claude     [import="components/claude-review.fabro"]
+  security   [import="components/security-review.fabro"]
+  personal   [import="components/personal-data-audit.fabro"]
+  ship       [import="components/commit-and-pr.fabro"]
+  steward    [import="components/pr-steward.fabro"]
+  done       [shape=diamond, label="Done"]
+
+  start -> bootstrap -> implement -> has_changes
+  has_changes -> coverage [label="has-changes"]
+  has_changes -> done     [label="no-changes"]
+  coverage -> coderabbit -> codex -> claude -> security -> personal -> ship -> steward -> done
+  done -> exit
+}

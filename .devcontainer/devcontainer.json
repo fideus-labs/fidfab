@@ -1,0 +1,32 @@
+{
+  "name": "fidfab sandbox",
+  "image": "fidfab:latest",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "remoteUser": "root",
+  "containerEnv": {
+    "FIDFAB_INTERACTIVE": "1"
+  },
+  "runArgs": [
+    "--env-file", "${localEnv:HOME}/.config/fidfab/agents.env"
+  ],
+  "mounts": [
+    "source=fidfab-pixi-envs,target=/opt/fidfab/cache/pixi-envs,type=volume",
+    "source=fidfab-cargo-target,target=/opt/fidfab/cache/target,type=volume"
+  ],
+  "postStartCommand": "fidfab-bootstrap --credentials-only || true",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "openai.chatgpt",
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "ms-python.python"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}

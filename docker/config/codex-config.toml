@@ -1,0 +1,16 @@
+# Codex configuration baked into the fidfab sandbox image.
+#
+# The sandbox is already an isolated Docker container that Fabro controls, so
+# Codex's own approval prompts and OS sandbox are disabled here. Do not reuse
+# this file on a developer workstation.
+
+model = "gpt-5.6-luna"
+model_reasoning_effort = "high"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+preferred_auth_method = "chatgpt"
+
+[mcp_servers.cocoindex-code]
+command = "ccc"
+args = ["mcp"]
+startup_timeout_sec = 60

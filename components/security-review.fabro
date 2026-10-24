@@ -1,0 +1,16 @@
+// Component: security-review
+// Claude (opus) security review of the diff, then verify & address.
+digraph SecurityReview {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  review  [label="Security review (Claude opus)", class="claude opus security",
+           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           prompt="@prompts/security-review.md"]
+  address [label="Verify & address (Claude opus)", class="claude opus verify",
+           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           prompt="@prompts/address-security.md"]
+  done    [shape=diamond, label="Security review addressed"]
+
+  start -> review -> address -> done -> exit
+}

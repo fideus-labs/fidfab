@@ -1,0 +1,27 @@
+// Component: pr-steward
+// Loop: read the PR status; if anything needs attention, Claude (opus)
+// addresses review comments (replying and resolving threads), rebases on
+// conflicts, and fixes failing CI. Wait an hour between iterations. Exit when
+// there are no unresolved comments, no conflicts and all checks are green.
+digraph PRSteward {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  status  [label="PR status", script="fidfab-pr-status", output_schema="routing",
+           retry_policy="linear", max_visits=200]
+  steward [label="Steward PR (Claude opus)", class="claude opus git",
+           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           prompt="@prompts/pr-steward.md", max_visits=200]
+  wait    [label="Wait 1 hour", shape=insulator, duration="60m", max_visits=200]
+  done    [shape=diamond, label="PR green & quiet"]
+
+  start   -> status
+  status  -> steward [label="work"]
+  status  -> wait    [label="pending"]
+  status  -> done    [label="done"]
+  status  -> done    [label="no-pr"]
+  status  -> steward [condition="outcome=failed"]
+  steward -> wait
+  wait    -> status
+  done    -> exit
+}

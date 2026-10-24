@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# fidfab-doctor — report what is installed in the fidfab sandbox image.
+#
+# Usage: fidfab-doctor [--brief] [--write-manifest <path>]
+set -uo pipefail
+brief=0; manifest=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --brief) brief=1; shift ;;
+    --write-manifest) manifest="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+ver() { # name, command...
+  local name="$1"; shift
+  local out
+  if out="$("$@" 2>/dev/null | head -n1)"; then printf '%-22s %s\n' "$name" "${out:-ok}"; else printf '%-22s %s\n' "$name" "MISSING"; fi
+}
+report="$(
+  ver "ubuntu"            bash -c '. /etc/os-release && echo "$PRETTY_NAME"'
+  ver "pixi"              pixi --version
+  ver "rustc"             rustc --version
+  ver "cargo"             cargo --version
+  ver "cargo-nextest"     cargo nextest --version
+  ver "node"              node --version
+  ver "vite+ (vp)"        vp --version
+  ver "claude"            claude --version
+  ver "claude-agent-acp"  claude-agent-acp --version
+  ver "codex"             codex --version
+  ver "codex-acp"         codex-acp --version
+  ver "coderabbit"        coderabbit --version
+  ver "serena"            serena --version
+  ver "cocoindex (ccc)"   ccc --version
+  ver "gh"                gh --version
+  ver "uv"                uv --version
+  ver "docker cli"        docker --version
+  printf '%-22s %s\n' "skills (claude)" "$(ls "$HOME/.claude/skills" 2>/dev/null | tr '\n' ' ')"
+  printf '%-22s %s\n' "skills (codex)"  "$(ls "$HOME/.agents/skills" 2>/dev/null | tr '\n' ' ')"
+  if [[ -d "${FIDFAB_REPO:-/opt/fidfab/repo}/.git" ]]; then
+    printf '%-22s %s\n' "baked repo" "$(git -C "${FIDFAB_REPO:-/opt/fidfab/repo}" remote get-url origin) @ $(git -C "${FIDFAB_REPO:-/opt/fidfab/repo}" rev-parse --short HEAD)"
+  else
+    printf '%-22s %s\n' "baked repo" "none (generic image)"
+  fi
+)"
+if [[ $brief -eq 1 ]]; then printf '%s\n' "$report" | grep -E 'MISSING|baked repo' >&2 || true; else printf '%s\n' "$report"; fi
+
+if [[ -n "$manifest" ]]; then
+  mkdir -p "$(dirname "$manifest")"
+  printf '%s\n' "$report" | awk '{name=$1; $1=""; sub(/^ +/,""); printf "%s%s\n", (NR>1?",":""), "{\"tool\":\"" name "\",\"version\":\"" $0 "\"}"}' \
+    | { echo '['; cat; echo ']'; } > "$manifest" 2>/dev/null || true
+fi
+printf '%s\n' "$report" | grep -q MISSING && exit 1 || exit 0

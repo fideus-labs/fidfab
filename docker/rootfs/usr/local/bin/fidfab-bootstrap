@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+# fidfab-bootstrap — first stage of every fidfab workflow.
+#
+# 1. Materialises agent credentials from the environment that Fabro injected
+#    from its vault ({{ secrets.* }} in workflow.toml) into the places the
+#    agent CLIs expect.
+# 2. Makes sure /workspace holds a checkout of the target branch. Fabro
+#    normally clones the GitHub origin itself; when it does not (run.clone
+#    disabled) the baked-in clone under $FIDFAB_REPO is used as the source.
+# 3. Attaches the warm caches baked into the image (cargo target dir, pixi
+#    environments, node_modules) so compilation and test runs start hot.
+# 4. Records base/head refs for later diff-oriented stages.
+#
+# Idempotent: safe to re-run after a resume or rewind.
+#
+# Usage: fidfab-bootstrap [--credentials-only]
+#   --credentials-only   stop after step 1 (used by the VS Code dev container).
+set -euo pipefail
+CREDENTIALS_ONLY=0
+[[ "${1:-}" == "--credentials-only" ]] && CREDENTIALS_ONLY=1
+
+log() { printf '[fidfab-bootstrap] %s\n' "$*" >&2; }
+
+WORKSPACE="${FIDFAB_WORKSPACE:-$(pwd)}"
+FIDFAB_REPO="${FIDFAB_REPO:-/opt/fidfab/repo}"
+FIDFAB_CACHE="${FIDFAB_CACHE:-/opt/fidfab/cache}"
+BASE_BRANCH="${FIDFAB_BASE_BRANCH:-}"
+
+# ---------------------------------------------------------------------------
+# 1. Credentials
+# ---------------------------------------------------------------------------
+# Claude Code: CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`) or
+# ANTHROPIC_API_KEY are read directly from the environment. Nothing to write.
+if [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+  log "Claude Code: subscription token present"
+elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+  log "Claude Code: API key present"
+else
+  log "warning: neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is set; Claude Code stages will fail"
+fi
+
+# Codex: a base64-encoded ~/.codex/auth.json. This carries either a ChatGPT
+# subscription login (`codex login --device-auth` on the host) or an API key
+# ({"OPENAI_API_KEY": "sk-..."}).
+export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+mkdir -p "$CODEX_HOME"
+if [[ -n "${CODEX_AUTH_JSON_B64:-}" ]]; then
+  umask 077
+  printf '%s' "$CODEX_AUTH_JSON_B64" | base64 -d > "$CODEX_HOME/auth.json"
+  umask 022
+  log "Codex: auth.json written to $CODEX_HOME"
+elif [[ -n "${OPENAI_API_KEY:-}" ]]; then
+  log "Codex: OPENAI_API_KEY present"
+else
+  log "warning: neither CODEX_AUTH_JSON_B64 nor OPENAI_API_KEY is set; Codex stages will fail"
+fi
+
+# CodeRabbit: agentic API key. Login once so later `coderabbit review` calls
+# reuse the stored credential and region.
+if [[ -n "${CODERABBIT_API_KEY:-}" ]]; then
+  if coderabbit auth login ${CODERABBIT_REGION:+--region "$CODERABBIT_REGION"} --api-key "$CODERABBIT_API_KEY" >/dev/null 2>&1; then
+    log "CodeRabbit: authenticated"
+  else
+    log "warning: CodeRabbit login failed; the workflow will fall back to Claude's built-in review"
+  fi
+else
+  log "warning: CODERABBIT_API_KEY is not set; the workflow will fall back to Claude's built-in review"
+fi
+
+# GitHub: Fabro supplies GITHUB_TOKEN when the workflow declares integration
+# permissions. gh picks GH_TOKEN/GITHUB_TOKEN up automatically.
+if [[ -n "${GITHUB_TOKEN:-}${GH_TOKEN:-}" ]]; then
+  export GH_TOKEN="${GH_TOKEN:-$GITHUB_TOKEN}"
+  gh auth setup-git >/dev/null 2>&1 || true
+  log "GitHub: token present"
+else
+  log "warning: no GITHUB_TOKEN; PR stages will fail (declare run.integrations.github.permissions)"
+fi
+
+if [[ "$CREDENTIALS_ONLY" == 1 ]]; then
+  log "credentials materialised; skipping workspace setup"
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Workspace
+# ---------------------------------------------------------------------------
+cd "$WORKSPACE"
+if [[ ! -d .git ]]; then
+  if [[ -d "$FIDFAB_REPO/.git" ]]; then
+    log "No checkout in $WORKSPACE; cloning from the baked-in repository"
+    git clone --shared "$FIDFAB_REPO" . >/dev/null
+    origin_url="$(git -C "$FIDFAB_REPO" remote get-url origin)"
+    git remote set-url origin "$origin_url"
+    git fetch --prune origin >/dev/null 2>&1 || log "warning: could not fetch origin (offline?)"
+    if [[ -n "${FIDFAB_BRANCH:-}" ]]; then
+      git checkout -B "$FIDFAB_BRANCH" "origin/$FIDFAB_BRANCH" 2>/dev/null || git checkout -B "$FIDFAB_BRANCH"
+    fi
+  else
+    log "error: $WORKSPACE is not a git checkout and no baked-in repository is available"
+    exit 2
+  fi
+fi
+
+# Dissociate from a shared clone if one was used, so the workspace is self-contained.
+if [[ -f .git/objects/info/alternates ]]; then
+  git repack -a -d -q && rm -f .git/objects/info/alternates
+fi
+
+# Fabro clones with --depth 100; deepen so merge-base against the base branch works.
+if [[ -f .git/shallow ]]; then
+  git fetch --unshallow --quiet origin 2>/dev/null || git fetch --deepen=1000 --quiet origin 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Warm caches
+# ---------------------------------------------------------------------------
+mkdir -p "$FIDFAB_CACHE"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$FIDFAB_CACHE/target}"
+mkdir -p "$CARGO_TARGET_DIR"
+
+if [[ -d "$FIDFAB_REPO/node_modules" && ! -e node_modules ]]; then
+  cp -a "$FIDFAB_REPO/node_modules" node_modules
+  log "node_modules restored from the image"
+fi
+if [[ -f pixi.toml || -f pyproject.toml ]] && command -v pixi >/dev/null; then
+  # Detached environments live under $FIDFAB_CACHE/pixi-envs (pixi global config).
+  pixi install --quiet >/dev/null 2>&1 && log "pixi environment ready" || log "warning: pixi install failed (continuing)"
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Refs for diff-oriented stages
+# ---------------------------------------------------------------------------
+git config --local user.name  "${GIT_AUTHOR_NAME:-fidfab}"
+git config --local user.email "${GIT_AUTHOR_EMAIL:-fidfab@fideus.io}"
+
+if [[ -z "$BASE_BRANCH" ]]; then
+  BASE_BRANCH="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || true)"
+  BASE_BRANCH="${BASE_BRANCH:-main}"
+fi
+git fetch --quiet origin "$BASE_BRANCH" 2>/dev/null || true
+MERGE_BASE="$(git merge-base HEAD "origin/$BASE_BRANCH" 2>/dev/null || git rev-parse HEAD)"
+
+mkdir -p .fidfab
+cat > .fidfab/run.env <<EOF
+FIDFAB_BASE_BRANCH=$BASE_BRANCH
+FIDFAB_MERGE_BASE=$MERGE_BASE
+FIDFAB_START_HEAD=$(git rev-parse HEAD)
+FIDFAB_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+EOF
+grep -qxF '.fidfab/' .git/info/exclude 2>/dev/null || echo '.fidfab/' >> .git/info/exclude
+
+log "workspace=$WORKSPACE branch=$(git rev-parse --abbrev-ref HEAD) base=$BASE_BRANCH merge_base=${MERGE_BASE:0:12}"
+fidfab-doctor --brief || true

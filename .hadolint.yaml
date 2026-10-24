@@ -1,0 +1,4 @@
+ignored:
+  # Ubuntu 24.04 apt versions move with security updates; the image is rebuilt locally
+  # and reproducibility comes from pixi/cargo lockfiles in the target repository.
+  - DL3008

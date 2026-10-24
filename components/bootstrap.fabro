@@ -1,0 +1,11 @@
+// Component: bootstrap
+// Materialise credentials, ensure the checkout, attach warm caches, record refs.
+digraph Bootstrap {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  bootstrap [label="Bootstrap sandbox", script="fidfab-bootstrap", retry_policy="linear"]
+  done      [shape=diamond, label="Bootstrapped"]
+
+  start -> bootstrap -> done -> exit
+}

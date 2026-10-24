@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# fidfab-warm-cache — pre-build the baked-in clone so later runs start hot.
+#
+# Usage: fidfab-warm-cache <repo-dir>
+#
+# Best effort: each ecosystem step is skipped when its manifest is absent and
+# failures never break the image build.
+set -uo pipefail
+repo="${1:?repo dir}"
+cd "$repo" || exit 1
+log() { printf '[fidfab-warm-cache] %s\n' "$*" >&2; }
+
+if [[ -f pixi.toml ]] || grep -qs '^\[tool.pixi' pyproject.toml 2>/dev/null; then
+  log "pixi install"; pixi install || log "pixi install failed (continuing)"
+fi
+if [[ -f Cargo.toml ]]; then
+  log "cargo fetch + build (dev, all targets)"
+  cargo fetch || true
+  cargo build --all-targets || log "cargo build failed (continuing)"
+  cargo nextest run --no-run >/dev/null 2>&1 || true
+fi
+if [[ -f package.json ]]; then
+  if command -v vp >/dev/null; then log "vp install"; vp install || log "vp install failed (continuing)"
+  elif [[ -f pnpm-lock.yaml ]] && command -v pnpm >/dev/null; then pnpm install --frozen-lockfile || true
+  else log "npm ci"; npm ci || npm install || true
+  fi
+fi
+if [[ -f pyproject.toml && ! -f pixi.toml ]] && command -v uv >/dev/null; then
+  log "uv sync"; uv sync || log "uv sync failed (continuing)"
+fi
+# Index the code base for Codex (cocoindex-code) so semantic search is instant.
+if command -v ccc >/dev/null; then log "ccc index"; ccc index >/dev/null 2>&1 || true; fi
+log "done"

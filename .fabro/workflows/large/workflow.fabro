@@ -1,0 +1,49 @@
+// fidfab: large development implementation (roadmap)
+//
+// Claude Code (fable) researches and drafts a roadmap of work items — each with
+// research notes, an implementation plan and acceptance criteria — and
+// iterates with the human. Codex critiques it, Claude addresses the critique,
+// the human gives final approval, and the markdown documents are committed and
+// opened as a PR. Each work item is then implemented incrementally with
+// `fidfab medium`.
+digraph FidfabLarge {
+  graph [max_node_visits=50, label="fidfab large"]
+
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  bootstrap [import="components/bootstrap.fabro"]
+
+  draft    [label="Research & draft roadmap (Claude fable)", class="claude fable plan",
+            backend="acp", acp.command="fidfab-claude-acp --model fable --effort max",
+            prompt="@components/prompts/roadmap-draft.md"]
+  gate     [shape=hexagon, label="Review the roadmap draft. Approve, or type feedback to revise.", max_visits=25]
+  revise   [label="Revise roadmap (Claude fable)", class="claude fable plan",
+            backend="acp", acp.command="fidfab-claude-acp --model fable",
+            prompt="@components/prompts/roadmap-revise.md", max_visits=25]
+
+  critique [label="Critique roadmap (Codex luna)", class="codex luna review",
+            backend="acp", acp.command="fidfab-codex-acp --model luna --effort xhigh",
+            prompt="@components/prompts/roadmap-codex-critique.md"]
+  address  [label="Address critique (Claude fable)", class="claude fable plan",
+            backend="acp", acp.command="fidfab-claude-acp --model fable",
+            prompt="@components/prompts/roadmap-address-critique.md"]
+  final    [shape=hexagon, label="Final roadmap review. Approve to commit, or type feedback to revise again.", max_visits=25]
+
+  commit   [label="Commit roadmap (Claude opus)", class="claude opus git",
+            backend="acp", acp.command="fidfab-claude-acp --model opus",
+            prompt="@components/prompts/commit-roadmap.md"]
+  pr       [label="Pull request (Claude opus)", class="claude opus git",
+            backend="acp", acp.command="fidfab-claude-acp --model opus",
+            prompt="@components/prompts/pull-request.md"]
+  steward  [import="components/pr-steward.fabro"]
+
+  start -> bootstrap -> draft -> gate
+  gate   -> critique [label="[A] Approve draft"]
+  gate   -> revise   [freeform=true]
+  revise -> gate
+  critique -> address -> final
+  final  -> commit   [label="[A] Approve roadmap"]
+  final  -> revise   [freeform=true]
+  commit -> pr -> steward -> exit
+}

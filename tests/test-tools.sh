@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Verify the base toolchain inside the fidfab image.
+set -euo pipefail
+fail=0
+check() { if "$@" >/dev/null 2>&1; then echo "[tools] ok   $*"; else echo "[tools] FAIL $*"; fail=1; fi; }
+check bash -c '. /etc/os-release && [ "$VERSION_ID" = "24.04" ]'
+check pixi --version
+check rustc --version
+check cargo --version
+check cargo nextest --version
+check node --version
+check vp --version
+check uv --version
+check serena --version
+check ccc --version
+check gh --version
+check claude --version
+check codex --version
+check coderabbit --version
+check claude-agent-acp --version
+check codex-acp --version
+check test -f "$HOME/.claude/skills/planning-with-files/SKILL.md"
+check test -f "$HOME/.claude/skills/code-review/SKILL.md"
+check test -f "$HOME/.claude/skills/security-audit/SKILL.md"
+check test -f "$HOME/.agents/skills/planning-with-files/SKILL.md"
+check test -f "$HOME/.claude/settings.json"
+check test -f "$HOME/.codex/config.toml"
+check grep -q serena "$HOME/.claude.json"
+check grep -q cocoindex-code "$HOME/.codex/config.toml"
+for s in fidfab-bootstrap fidfab-claude-acp fidfab-codex-acp fidfab-coderabbit fidfab-diff fidfab-pr-status fidfab-doctor fidfab-warm-cache; do check command -v "$s"; done
+# pixi can create an environment offline-free (uses the warm cache if present)
+tmp="$(mktemp -d)"; ( cd "$tmp" && pixi init -q . >/dev/null && pixi --version >/dev/null ) && echo "[tools] ok   pixi init" || { echo "[tools] FAIL pixi init"; fail=1; }
+rm -rf "$tmp"
+fidfab-doctor || true
+exit $fail

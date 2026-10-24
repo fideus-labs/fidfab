@@ -1,0 +1,23 @@
+// Component: plan-with-files
+// Claude (fable) drafts task_plan.md / findings.md / progress.md with the
+// planning-with-files skill, then iterates with the human until approved.
+digraph PlanWithFiles {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  plan   [label="Plan with files (Claude fable)", class="claude fable plan",
+          backend="acp", acp.command="fidfab-claude-acp --model fable",
+          prompt="@prompts/plan-medium.md"]
+  gate   [shape=hexagon, label="Review task_plan.md. Approve, or type feedback to revise.",
+          max_visits=25]
+  revise [label="Revise plan (Claude fable)", class="claude fable plan",
+          backend="acp", acp.command="fidfab-claude-acp --model fable",
+          prompt="@prompts/plan-revise.md", max_visits=25]
+  done   [shape=diamond, label="Plan approved"]
+
+  start  -> plan -> gate
+  gate   -> done   [label="[A] Approve plan"]
+  gate   -> revise [freeform=true]
+  revise -> gate
+  done   -> exit
+}

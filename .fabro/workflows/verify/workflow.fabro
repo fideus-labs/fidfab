@@ -1,0 +1,30 @@
+// fidfab: verify an existing branch
+//
+// For work started interactively (for example a Claude Code session in a git
+// worktree): push the branch, then run only the verification pipeline on its
+// diff → PR → steward loop.
+digraph FidfabVerify {
+  graph [max_node_visits=50, label="fidfab verify"]
+
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  bootstrap [import="components/bootstrap.fabro"]
+
+  has_changes [label="Branch has changes?", script="fidfab-diff --has-changes", output_schema="routing"]
+  coverage   [import="components/coverage.fabro"]
+  coderabbit [import="components/coderabbit-review.fabro"]
+  codex      [import="components/codex-review.fabro"]
+  claude     [import="components/claude-review.fabro"]
+  security   [import="components/security-review.fabro"]
+  personal   [import="components/personal-data-audit.fabro"]
+  ship       [import="components/commit-and-pr.fabro"]
+  steward    [import="components/pr-steward.fabro"]
+  done       [shape=diamond, label="Done"]
+
+  start -> bootstrap -> has_changes
+  has_changes -> coverage [label="has-changes"]
+  has_changes -> done     [label="no-changes"]
+  coverage -> coderabbit -> codex -> claude -> security -> personal -> ship -> steward -> done
+  done -> exit
+}

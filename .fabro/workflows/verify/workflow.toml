@@ -1,0 +1,60 @@
+# fidfab `verify`
+# Verification pipeline for an existing branch (for example from an interactive Claude Code worktree session): coverage, reviews, security, PR and steward loop.
+#
+# Run from a checkout of the target repository (the workflow is discovered
+# from .fabro/workflows when fidfab is vendored or subtree'd there), or
+# reference it remotely:
+#   fabro run verify --goal "…" -I plan_slug=2026-10-24-my-task
+#   fabro run fideus-labs/fidfab:verify --goal-file task.md --target OWNER/REPO@branch
+_version = 1
+
+[workflow]
+graph = "workflow.fabro"
+
+# The goal is the task text; supply it per run with --goal or --goal-file.
+# Everything below is a workflow-owned default; override inputs with -I key=value.
+[run.inputs]
+# Directory (relative to the repository root) for planning artifacts:
+# task_plan.md / findings.md / progress.md, or the roadmap documents.
+plans_dir = "docs/plans"
+# Sub-directory for this task's artifacts, e.g. -I plan_slug=2026-10-24-chunk-cache
+plan_slug = "task"
+# Open the pull request as a draft ("true" / "false").
+draft_pr = "false"
+
+# ---------------------------------------------------------------------------
+# Sandbox: the locally built fidfab image (see README "Build the image").
+# The environment is defined here so the workflow is self-describing; a
+# server-managed environment with the same id takes precedence if present.
+# ---------------------------------------------------------------------------
+[run.environment]
+id = "fidfab"
+
+[environments.fidfab]
+provider = "docker"
+
+[environments.fidfab.image]
+docker = "fidfab:latest"
+
+[environments.fidfab.lifecycle]
+preserve = false
+stop_on_terminal = true
+
+# Agent credentials are resolved from the Fabro vault when the run starts and
+# injected into the sandbox environment. They never appear in workflow text,
+# events or logs. Create them with `fabro secret set NAME` (see README).
+[run.environment.env]
+CLAUDE_CODE_OAUTH_TOKEN = "{{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"
+CODEX_AUTH_JSON_B64     = "{{ secrets.CODEX_AUTH_JSON_B64 }}"
+CODERABBIT_API_KEY      = "{{ secrets.CODERABBIT_API_KEY }}"
+
+# GitHub access for the sandbox: push the branch, open and edit the PR, post
+# and resolve review comments, read CI results. Fabro mints a scoped
+# GITHUB_TOKEN for the run.
+[run.integrations.github]
+permissions = { contents = "write", pull_requests = "write", issues = "write", checks = "read", actions = "read", statuses = "read", metadata = "read" }
+
+# Fabro clones the target repository into the sandbox (depth 100);
+# fidfab-bootstrap deepens the history and attaches the image's warm caches.
+[run.clone]
+enabled = true

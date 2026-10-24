@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# fidfab-coderabbit — CodeRabbit availability check and review wrapper.
+#
+# Usage:
+#   fidfab-coderabbit available   # exit 0 if the CLI is authenticated and the service answers
+#   fidfab-coderabbit review      # agent-formatted review of this branch vs. the base branch
+#
+# `available` is used by the workflow to decide between the CodeRabbit review
+# path and the Claude built-in review fallback (with one 3-minute retry).
+set -euo pipefail
+
+[[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
+base="${FIDFAB_BASE_BRANCH:-main}"
+
+case "${1:-}" in
+  available)
+    command -v coderabbit >/dev/null || { echo "coderabbit: not installed" >&2; exit 1; }
+    out="$(timeout 60 coderabbit auth status --agent 2>&1 || true)"
+    if printf '%s' "$out" | grep -qiE 'authenticated|logged in|"status" *: *"ok"'; then
+      echo "coderabbit: available"; exit 0
+    fi
+    echo "coderabbit: unavailable — $out" >&2
+    exit 1
+    ;;
+  review)
+    shift
+    exec coderabbit review --agent --base "$base" "$@"
+    ;;
+  *)
+    sed -n '2,10p' "$0"; exit 64 ;;
+esac

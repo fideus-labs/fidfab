@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# fidfab-diff — show the branch diff that review stages must restrict themselves to.
+#
+# Usage: fidfab-diff [--stat|--names|--has-changes]
+#
+# The diff is taken from the merge base with the base branch (recorded by
+# fidfab-bootstrap) to the working tree, so uncommitted work from an
+# implementation stage is included.
+set -euo pipefail
+[[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
+base="${FIDFAB_MERGE_BASE:-$(git merge-base HEAD origin/${FIDFAB_BASE_BRANCH:-main} 2>/dev/null || git rev-parse HEAD~1)}"
+
+case "${1:-}" in
+  --stat)  git add -A -N . && git diff --stat "$base" ;;
+  --names) git add -A -N . && git diff --name-only "$base" ;;
+  --has-changes)
+    git add -A -N . >/dev/null 2>&1 || true
+    if git diff --quiet "$base" -- && [[ -z "$(git status --porcelain)" ]]; then
+      echo '{"preferred_next_label":"no-changes","context_updates":{"has_changes":false}}'
+    else
+      echo '{"preferred_next_label":"has-changes","context_updates":{"has_changes":true}}'
+    fi
+    ;;
+  *) git add -A -N . && git diff "$base" ;;
+esac

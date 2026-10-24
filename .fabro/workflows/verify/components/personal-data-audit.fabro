@@ -1,0 +1,25 @@
+// Component: personal-data-audit
+// Codex decides whether the changes touch potentially personal data. If so,
+// run Cloudflare's security-audit skill and have Claude (opus) verify and
+// address the findings.
+digraph PersonalDataAudit {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  decide  [label="Personal data involved? (Codex)", class="codex luna decision",
+           backend="acp", acp.command="fidfab-codex-acp --model luna --effort medium",
+           prompt="@prompts/personal-data-decision.md", output_schema="routing"]
+  audit   [label="Security audit (Cloudflare skill, Claude opus)", class="claude opus security",
+           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           prompt="@prompts/cloudflare-security-audit.md"]
+  address [label="Verify & address audit (Claude opus)", class="claude opus verify",
+           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           prompt="@prompts/address-audit.md"]
+  done    [shape=diamond, label="Personal-data check done"]
+
+  start  -> decide
+  decide -> audit [label="personal-data"]
+  decide -> done  [label="no-personal-data"]
+  audit  -> address -> done
+  done   -> exit
+}

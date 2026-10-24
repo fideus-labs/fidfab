@@ -1,0 +1,17 @@
+// Component: claude-review
+// The same review priorities run by Claude (fable), then Claude (opus) verifies
+// and addresses each finding and records the approach.
+digraph ClaudeReview {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  review  [label="Review (Claude fable)", class="claude fable review",
+           backend="acp", acp.command="fidfab-claude-acp --model fable",
+           prompt="@prompts/review-claude.md"]
+  address [label="Verify & address (Claude opus)", class="claude opus verify",
+           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           prompt="@prompts/address-claude.md"]
+  done    [shape=diamond, label="Claude review addressed"]
+
+  start -> review -> address -> done -> exit
+}
