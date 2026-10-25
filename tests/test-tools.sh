@@ -33,9 +33,11 @@ check bash -c '[ "$(command -v node)" = /usr/bin/node ]'
 check bash -c 'test -s /opt/fidfab/manifest.json && ! grep -q MISSING /opt/fidfab/manifest.json'
 # GitHub's host keys are pinned so private target repos can be cloned over SSH.
 check ssh-keygen -F github.com -f /etc/ssh/ssh_known_hosts
-# A baked clone must fetch with GITHUB_TOKEN at run time, so its origin is HTTPS.
+check ssh-keygen -F '[ssh.github.com]:443' -f /etc/ssh/ssh_known_hosts
+# A baked clone must fetch with GITHUB_TOKEN at run time, so its origin is HTTPS
+# on a host that serves git over HTTPS (ssh.github.com does not).
 if [[ -d /opt/fidfab/repo/.git ]]; then
-  check bash -c 'git -C /opt/fidfab/repo remote get-url origin | grep -q "^https://"'
+  check bash -c 'u="$(git -C /opt/fidfab/repo remote get-url origin)" && [[ $u == https://* && $u != https://ssh.github.com/* ]]'
 fi
 for s in fidfab-bootstrap fidfab-claude-acp fidfab-codex-acp fidfab-coderabbit fidfab-diff fidfab-pr-status fidfab-doctor fidfab-warm-cache; do check command -v "$s"; done
 # pixi can create an environment offline-free (uses the warm cache if present)

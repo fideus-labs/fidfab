@@ -193,16 +193,18 @@ RUN chmod +x /usr/local/bin/fidfab-*
 # build.sh forwards the host ssh-agent (`--ssh default`), which only the clone
 # step can use (cache warming runs repository code, so it gets no agent), and
 # GitHub's host keys come from /etc/ssh/ssh_known_hosts. The origin is then
-# rewritten to HTTPS (ssh://[user@]host[:port]/path and user@host:path forms)
-# because sandboxes authenticate to GitHub with GITHUB_TOKEN (see
-# fidfab-bootstrap), not with an SSH key.
+# rewritten to HTTPS (ssh://[user@]host[:port]/path and user@host:path forms;
+# GitHub's port-443 SSH host ssh.github.com has no HTTPS git service, so it
+# maps to github.com) because sandboxes authenticate to GitHub with
+# GITHUB_TOKEN (see fidfab-bootstrap), not with an SSH key.
 RUN --mount=type=ssh \
     if [ -n "${TARGET_REPO_URL}" ]; then \
         git clone --branch "${TARGET_REPO_REF}" "${TARGET_REPO_URL}" ${FIDFAB_REPO} \
         && git -C ${FIDFAB_REPO} remote set-url origin \
             "$(printf '%s' "${TARGET_REPO_URL}" | sed -E \
                 -e 's#^ssh://([^@/]+@)?([^:/]+)(:[0-9]+)?/#https://\2/#' \
-                -e 's#^[^@/:]+@([^:/]+):#https://\1/#')"; \
+                -e 's#^[^@/:]+@([^:/]+):#https://\1/#' \
+                -e 's#^https://ssh\.github\.com/#https://github.com/#')"; \
     else \
         echo "TARGET_REPO_URL not set; building a generic fidfab image"; \
     fi

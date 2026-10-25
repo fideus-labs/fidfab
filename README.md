@@ -183,8 +183,9 @@ baked into the image.
 
 Private repositories can be given as SSH URLs. `build.sh` then forwards your ssh-agent to the
 clone step only (`docker build --ssh default`), so `ssh-add` your GitHub key first; the key never
-reaches an image layer. GitHub's host keys are pinned in `docker/rootfs/etc/ssh/ssh_known_hosts`.
-The baked clone's `origin` is rewritten to HTTPS, because sandboxes authenticate to GitHub with
+reaches an image layer. GitHub's host keys, for `github.com` and the port-443 endpoint
+`ssh.github.com`, are pinned in `docker/rootfs/etc/ssh/ssh_known_hosts`. The baked clone's
+`origin` is rewritten to HTTPS on `github.com`, because sandboxes authenticate to GitHub with
 Fabro's `GITHUB_TOKEN` rather than an SSH key.
 
 ### 5. Agent credentials (Fabro vault)
