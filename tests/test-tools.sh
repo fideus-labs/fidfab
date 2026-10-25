@@ -31,6 +31,12 @@ check grep -q cocoindex-code "$HOME/.codex/config.toml"
 check bash -c '[ "$(command -v node)" = /usr/bin/node ]'
 # The build-time manifest is written by fidfab-doctor; every tool must be found.
 check bash -c 'test -s /opt/fidfab/manifest.json && ! grep -q MISSING /opt/fidfab/manifest.json'
+# GitHub's host keys are pinned so private target repos can be cloned over SSH.
+check ssh-keygen -F github.com -f /etc/ssh/ssh_known_hosts
+# A baked clone must fetch with GITHUB_TOKEN at run time, so its origin is HTTPS.
+if [[ -d /opt/fidfab/repo/.git ]]; then
+  check bash -c 'git -C /opt/fidfab/repo remote get-url origin | grep -q "^https://"'
+fi
 for s in fidfab-bootstrap fidfab-claude-acp fidfab-codex-acp fidfab-coderabbit fidfab-diff fidfab-pr-status fidfab-doctor fidfab-warm-cache; do check command -v "$s"; done
 # pixi can create an environment offline-free (uses the warm cache if present)
 tmp="$(mktemp -d)"; ( cd "$tmp" && pixi init -q . >/dev/null && pixi --version >/dev/null ) && echo "[tools] ok   pixi init" || { echo "[tools] FAIL pixi init"; fail=1; }

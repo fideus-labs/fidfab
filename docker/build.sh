@@ -5,6 +5,7 @@
 #   docker/build.sh                                  # generic image (no baked repo)
 #   docker/build.sh https://github.com/OWNER/REPO    # image specialised for a target repo
 #   docker/build.sh https://github.com/OWNER/REPO main fidfab:ngff-zarr
+#   docker/build.sh git@github.com:OWNER/REPO        # private repo over SSH (uses ssh-agent)
 #
 # Environment overrides: FIDFAB_IMAGE (default fidfab:latest), UBUNTU_VERSION,
 # NODE_MAJOR, RUST_TOOLCHAIN, CLAUDE_CODE_VERSION, CODEX_VERSION,
@@ -25,6 +26,17 @@ args=(
   --build-arg "TARGET_REPO_URL=$repo_url"
   --build-arg "TARGET_REPO_REF=$repo_ref"
 )
+# SSH URLs (git@host:OWNER/REPO, ssh://...) are cloned with the host's
+# ssh-agent, which BuildKit exposes to the clone step only.
+case "$repo_url" in
+  git@*|ssh://*)
+    if [[ -z "${SSH_AUTH_SOCK:-}" ]]; then
+      echo "error: $repo_url is an SSH URL; start ssh-agent and ssh-add your GitHub key" >&2
+      exit 1
+    fi
+    args+=(--ssh default)
+    ;;
+esac
 for var in UBUNTU_VERSION NODE_MAJOR RUST_TOOLCHAIN CLAUDE_CODE_VERSION CODEX_VERSION CLAUDE_AGENT_ACP_VERSION CODEX_ACP_VERSION; do
   if [[ -n "${!var:-}" ]]; then args+=(--build-arg "$var=${!var}"); fi
 done

@@ -162,6 +162,7 @@ from the environment ([Fabro Brave Search integration](https://docs.fabro.sh/int
 ```bash
 docker/build.sh                                      # generic image
 docker/build.sh https://github.com/OWNER/REPO main   # with a baked-in clone and warm caches
+docker/build.sh git@github.com:OWNER/REPO main       # private repo, cloned with your ssh-agent
 ```
 
 The image starts from `ubuntu:24.04` and installs, in this order:
@@ -179,6 +180,12 @@ PR stages. Pin versions with `CLAUDE_CODE_VERSION`, `CODEX_VERSION`, `RUST_TOOLC
 With a repository URL, the build clones it to `/opt/fidfab/repo`, pre-builds its pixi and
 Cargo dependencies, and `fidfab-bootstrap` reuses those caches in every run. Nothing secret is
 baked into the image.
+
+Private repositories can be given as SSH URLs. `build.sh` then forwards your ssh-agent to the
+clone step only (`docker build --ssh default`), so `ssh-add` your GitHub key first; the key never
+reaches an image layer. GitHub's host keys are pinned in `docker/rootfs/etc/ssh/ssh_known_hosts`.
+The baked clone's `origin` is rewritten to HTTPS, because sandboxes authenticate to GitHub with
+Fabro's `GITHUB_TOKEN` rather than an SSH key.
 
 ### 5. Agent credentials (Fabro vault)
 
