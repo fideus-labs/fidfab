@@ -14,22 +14,11 @@
 ARG UBUNTU_VERSION=24.04
 FROM ubuntu:${UBUNTU_VERSION}
 
-# ---------------------------------------------------------------------------
-# Build arguments
-# ---------------------------------------------------------------------------
-# TARGET_REPO_URL and TARGET_REPO_REF are declared next to the clone step at
-# the end: every RUN after an ARG sees it in its environment, so a changed
-# value there would rebuild the whole toolchain.
-# Toolchain pins. "latest" is fine for a local image; pin for reproducibility.
-ARG NODE_MAJOR=22
-ARG RUST_TOOLCHAIN=stable
-ARG CLAUDE_CODE_VERSION=latest
-ARG CODEX_VERSION=latest
-ARG CLAUDE_AGENT_ACP_VERSION=latest
-ARG CODEX_ACP_VERSION=latest
-ARG PLANNING_WITH_FILES_REF="OthmanAdi/planning-with-files"
-ARG CODERABBIT_SKILLS_REF="coderabbitai/skills"
-ARG CLOUDFLARE_SECURITY_AUDIT_REF="https://github.com/cloudflare/security-audit-skill"
+# Build arguments are declared just above the step that uses them: every RUN
+# after an ARG sees it in its environment, so declaring one earlier would make
+# a changed value rebuild every layer in between. The toolchain and agent pins
+# float ("stable", "latest"), which is fine for a local image; pin them for
+# reproducibility (see build.sh).
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -70,6 +59,7 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && rm -rf /var/lib/apt/lists/*
 
 # Node.js (Claude Code, Codex, the ACP adapters and the skills CLI are npm packages)
+ARG NODE_MAJOR=22
 RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && npm install -g npm@latest \
@@ -108,6 +98,7 @@ ENV RUSTUP_HOME=/opt/rust/rustup \
     CARGO_TARGET_DIR=/opt/fidfab/cache/target \
     CARGO_INCREMENTAL=0 \
     RUST_BACKTRACE=1
+ARG RUST_TOOLCHAIN=stable
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | sh -s -- -y --no-modify-path --default-toolchain ${RUST_TOOLCHAIN} --profile minimal \
             --component clippy,rustfmt,rust-src,rust-analyzer \
@@ -129,6 +120,10 @@ ENV PATH="/root/.local/share/vite-plus/bin:/root/.local/bin:${PATH}"
 # ---------------------------------------------------------------------------
 # npm 12 blocks install scripts that are not allowlisted. Claude Code's
 # postinstall links its platform-native binary; without it `claude` is a stub.
+ARG CLAUDE_CODE_VERSION=latest
+ARG CODEX_VERSION=latest
+ARG CLAUDE_AGENT_ACP_VERSION=latest
+ARG CODEX_ACP_VERSION=latest
 RUN npm install -g --allow-scripts=@anthropic-ai/claude-code \
         @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
         @openai/codex@${CODEX_VERSION} \
@@ -172,6 +167,9 @@ ENV MCP_TIMEOUT=60000
 # Installed globally for both Claude Code and Codex.
 # ---------------------------------------------------------------------------
 # Skills land in ~/.claude/skills (Claude Code) and ~/.agents/skills (Codex).
+ARG PLANNING_WITH_FILES_REF="OthmanAdi/planning-with-files"
+ARG CODERABBIT_SKILLS_REF="coderabbitai/skills"
+ARG CLOUDFLARE_SECURITY_AUDIT_REF="https://github.com/cloudflare/security-audit-skill"
 RUN npx -y skills add ${PLANNING_WITH_FILES_REF} --skill planning-with-files -g -y -a claude-code -a codex --copy \
     && npx -y skills add ${CODERABBIT_SKILLS_REF} --skill code-review -g -y -a claude-code -a codex --copy \
     && npx -y skills add ${CLOUDFLARE_SECURITY_AUDIT_REF} --skill security-audit -g -y -a claude-code -a codex --copy \
