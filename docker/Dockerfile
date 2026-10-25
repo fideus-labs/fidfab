@@ -17,11 +17,9 @@ FROM ubuntu:${UBUNTU_VERSION}
 # ---------------------------------------------------------------------------
 # Build arguments
 # ---------------------------------------------------------------------------
-# The repository this image is specialised for. The clone is used as a warm
-# cache (compiled artefacts, pixi environments, node_modules) and as a
-# `git clone --reference` source when Fabro does not clone the repo itself.
-ARG TARGET_REPO_URL=""
-ARG TARGET_REPO_REF="main"
+# TARGET_REPO_URL and TARGET_REPO_REF are declared next to the clone step at
+# the end: every RUN after an ARG sees it in its environment, so a changed
+# value there would rebuild the whole toolchain.
 # Toolchain pins. "latest" is fine for a local image; pin for reproducibility.
 ARG NODE_MAJOR=22
 ARG RUST_TOOLCHAIN=stable
@@ -188,6 +186,13 @@ RUN chmod +x /usr/local/bin/fidfab-*
 # ---------------------------------------------------------------------------
 # Built-in clone of the target repository with warmed caches
 # ---------------------------------------------------------------------------
+# The repository this image is specialised for. The clone is used as a warm
+# cache (compiled artefacts, pixi environments, node_modules) and as a
+# `git clone --reference` source when Fabro does not clone the repo itself.
+# Declared here rather than at the top so that building for another repository
+# reuses every cached layer above.
+ARG TARGET_REPO_URL=""
+ARG TARGET_REPO_REF="main"
 # Skipped when TARGET_REPO_URL is empty, which produces a generic image.
 # Private repositories can be given as SSH URLs (git@github.com:OWNER/REPO):
 # build.sh forwards the host ssh-agent (`--ssh default`), which only the clone
