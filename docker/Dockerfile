@@ -122,12 +122,16 @@ RUN cargo install --locked cargo-nextest cargo-llvm-cov cargo-deny cargo-audit w
 # Vite+ (https://vite.plus) — unified JS/TS toolchain (`vp`)
 # ---------------------------------------------------------------------------
 RUN curl -fsSL https://vite.plus | bash
-ENV PATH="/root/.vite-plus/bin:/root/.local/bin:${PATH}"
+# The installer puts its `vp` shims in ~/.local/share/vite-plus/bin. Its
+# fallback-bin (node/npm shims) is left off PATH so the system Node stays first.
+ENV PATH="/root/.local/share/vite-plus/bin:/root/.local/bin:${PATH}"
 
 # ---------------------------------------------------------------------------
 # Agents: Claude Code, Codex, and their ACP adapters
 # ---------------------------------------------------------------------------
-RUN npm install -g \
+# npm 12 blocks install scripts that are not allowlisted. Claude Code's
+# postinstall links its platform-native binary; without it `claude` is a stub.
+RUN npm install -g --allow-scripts=@anthropic-ai/claude-code \
         @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
         @openai/codex@${CODEX_VERSION} \
         @agentclientprotocol/claude-agent-acp@${CLAUDE_AGENT_ACP_VERSION} \

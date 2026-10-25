@@ -31,7 +31,7 @@ report="$(
   ver "codex-acp"         codex-acp --version
   ver "coderabbit"        coderabbit --version
   ver "serena"            serena --version
-  ver "cocoindex (ccc)"   ccc --version
+  ver "cocoindex (ccc)"   ccc version
   ver "gh"                gh --version
   ver "uv"                uv --version
   ver "docker cli"        docker --version
