@@ -99,7 +99,8 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 ### Prerequisites
 
 - Linux or macOS workstation with Docker (daemon running, your user can access the socket)
-- A GitHub account with push access to the target repository
+- A GitHub account with push access to the target repository, logged in with the `gh` CLI
+  (`gh auth login`; `fabro install` takes its GitHub token from `gh auth token`)
 - Subscriptions or keys: Claude Pro/Max (for Claude Code), ChatGPT Plus/Pro or an OpenAI API key
   (for Codex), a [CodeRabbit](https://www.coderabbit.ai) account with an agentic API key, a
   [DeepSeek Platform](https://platform.deepseek.com/) key, a [Brave Search API](https://brave.com/search/api/) key
@@ -122,12 +123,19 @@ The steps below are what the script does, if you prefer to run them yourself.
 curl -fsSL https://fabro.sh/install.sh | bash
 export PATH="$HOME/.fabro/bin:$PATH"
 fabro upgrade --prerelease
-fabro install             # wizard: LLM provider, GitHub, local server
+fabro install --non-interactive --skip-llm --github-strategy token \
+  --github-username "$(gh api user --jq .login)"   # GitHub token from gh, no LLM provider yet
 fabro server start
 ```
 
 The installer and the `--prerelease` upgrade channel are documented in the
-[Fabro quick start](https://docs.fabro.sh/getting-started/quick-start).
+[Fabro quick start](https://docs.fabro.sh/getting-started/quick-start). The scripted flags are
+hidden from `fabro install --help`. The interactive wizard (`fabro install`) works too: answer No
+to `Configure LLM providers now?`. When `codex` is on PATH it otherwise asks
+`OpenAI (Codex) detected. Set up OpenAI with device code login?`, which stores a
+ChatGPT-subscription credential that Fabro routes through the Codex backend
+(`chatgpt.com/backend-api/codex`). fidfab does not use Fabro's OpenAI provider: native nodes run
+on DeepSeek (next step) and the Codex stages authenticate with `CODEX_AUTH_JSON_B64` (step 5).
 
 ### 2. DeepSeek as Fabro's default model
 
@@ -371,6 +379,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 |---|---|---|
 | `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow |
 | `scripts/sync-components.sh --check` | host, CI | vendored components match `components/` |
+| `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard (stubbed `fabro`/`gh`) |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |
 | `tests/test-coderabbit.sh` | image | CLI installed; with `CODERABBIT_API_KEY`, `auth login` and `auth status --agent` succeed |
 | `tests/test-claude-acp.sh` | image | ACP `initialize` handshake; with a token, a full `session/prompt` round-trip returns the expected marker |
@@ -417,6 +426,9 @@ docs/graphs/             rendered workflow graphs
   vendored per workflow (`scripts/sync-components.sh`). Nested imports (a component importing
   a component) are avoided for the same reason.
 - `fabro graph` needs a ready LLM provider on the server before it renders.
+- If the install wizard set up OpenAI via Codex device login, run `scripts/setup.sh deepseek`
+  so `[run.model]` points at DeepSeek; the ChatGPT-subscription OpenAI credential then stays unused.
+  The wizard writes no `[run.model]`; if you added one by hand, the step leaves it alone, so edit it.
 - Subscription credentials (Claude Code OAuth token, Codex `auth.json`) expire and rotate;
   `scripts/setup.sh claude` / `scripts/setup.sh codex` refresh them.
 
