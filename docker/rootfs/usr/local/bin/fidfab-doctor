@@ -23,6 +23,7 @@ report="$(
   ver "rustc"             rustc --version
   ver "cargo"             cargo --version
   ver "cargo-nextest"     cargo nextest --version
+  ver "sccache"           sccache --version
   ver "node"              node --version
   ver "vite+ (vp)"        vp --version
   ver "claude"            claude --version

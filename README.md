@@ -167,8 +167,10 @@ docker/build.sh git@github.com:OWNER/REPO main       # private repo, cloned with
 
 The image starts from `ubuntu:24.04` and installs, in this order:
 [pixi](https://pixi.sh) (environments detached under `/opt/fidfab/cache/pixi-envs`),
-Rust via rustup with `cargo-nextest`, `cargo-llvm-cov`, `cargo-deny`, `cargo-audit` and
-`wasm-pack`, [Vite+](https://vite.plus), Node 22, Claude Code, Codex, the
+Rust via rustup with `cargo-nextest`, `cargo-llvm-cov`, `cargo-deny`, `cargo-audit`,
+`wasm-pack` and [sccache](https://github.com/mozilla/sccache) as `RUSTC_WRAPPER` (25 GB local
+cache under `/opt/fidfab/cache/sccache`), [Vite+](https://vite.plus), Node 22, Claude Code,
+Codex, the
 [Claude Code ACP adapter](https://github.com/agentclientprotocol/claude-agent-acp) and the
 [Codex ACP adapter](https://github.com/agentclientprotocol/codex-acp), the
 [CodeRabbit CLI](https://docs.coderabbit.ai/cli/overview), [Serena](https://github.com/oraios/serena)
@@ -178,8 +180,8 @@ Cloudflare security-audit skills for both agents. The `gh` and `docker` CLIs are
 PR stages. Pin versions with `CLAUDE_CODE_VERSION`, `CODEX_VERSION`, `RUST_TOOLCHAIN`, etc.
 
 With a repository URL, the build clones it to `/opt/fidfab/repo`, pre-builds its pixi and
-Cargo dependencies, and `fidfab-bootstrap` reuses those caches in every run. Nothing secret is
-baked into the image.
+Cargo dependencies (a Rust repository is built through sccache, so its cache is warm), and
+`fidfab-bootstrap` reuses those caches in every run. Nothing secret is baked into the image.
 
 Private repositories can be given as SSH URLs. `build.sh` then forwards your ssh-agent to the
 clone step only (`docker build --ssh default`), so `ssh-add` your GitHub key first; the key never

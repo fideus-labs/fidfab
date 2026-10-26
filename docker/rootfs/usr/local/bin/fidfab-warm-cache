@@ -18,6 +18,9 @@ if [[ -f Cargo.toml ]]; then
   cargo fetch || true
   cargo build --all-targets || log "cargo build failed (continuing)"
   cargo nextest run --no-run >/dev/null 2>&1 || true
+  # The sccache server writes cache entries asynchronously; stop it so they are
+  # all on disk before the image layer is committed (prints the hit stats).
+  sccache --stop-server >&2 || true
 fi
 if [[ -f package.json ]]; then
   if command -v vp >/dev/null; then log "vp install"; vp install || log "vp install failed (continuing)"

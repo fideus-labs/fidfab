@@ -8,6 +8,8 @@ check pixi --version
 check rustc --version
 check cargo --version
 check cargo nextest --version
+check sccache --version
+check bash -c '[ "$RUSTC_WRAPPER" = sccache ] && [ "$SCCACHE_CACHE_SIZE" = 25G ]'
 check node --version
 check vp --version
 check uv --version
@@ -42,6 +44,16 @@ fi
 for s in fidfab-bootstrap fidfab-claude-acp fidfab-codex-acp fidfab-coderabbit fidfab-diff fidfab-pr-status fidfab-doctor fidfab-warm-cache; do check command -v "$s"; done
 # pixi can create an environment offline-free (uses the warm cache if present)
 tmp="$(mktemp -d)"; ( cd "$tmp" && pixi init -q . >/dev/null && pixi --version >/dev/null ) && echo "[tools] ok   pixi init" || { echo "[tools] FAIL pixi init"; fail=1; }
+rm -rf "$tmp"
+# A Rust checkout warmed by fidfab-warm-cache is served from sccache afterwards:
+# rebuilding into an empty target dir must hit the cache for the library crate.
+tmp="$(mktemp -d)"
+( cd "$tmp" && export CARGO_TARGET_DIR="$tmp/target" \
+  && cargo new -q --lib dep && cargo new -q app && cargo add -q --manifest-path app/Cargo.toml --path dep \
+  && fidfab-warm-cache "$tmp/app" >/dev/null 2>&1 \
+  && rm -rf "$tmp/target" && sccache --zero-stats >/dev/null && cargo build -q --manifest-path app/Cargo.toml \
+  && sccache --show-stats | grep -Eq 'Cache hits +[1-9]' ) \
+  && echo "[tools] ok   sccache warm cache" || { echo "[tools] FAIL sccache warm cache"; fail=1; }
 rm -rf "$tmp"
 fidfab-doctor || true
 exit $fail
