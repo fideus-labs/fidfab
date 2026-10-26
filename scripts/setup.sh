@@ -53,10 +53,24 @@ step_fabro() {
   fabro upgrade --prerelease --no-upgrade-check || true
   note "fabro $(fabro --version)"
   if [[ ! -f "$SETTINGS" ]]; then
-    note "Running the install wizard (LLM provider, GitHub, local server)…"
-    note "Choose DeepSeek as the LLM provider if you want it as the default model now;"
-    note "it can also be configured afterwards with: scripts/setup.sh deepseek"
-    fabro install
+    # With `codex` on PATH the wizard offers OpenAI device-code login, which stores a
+    # ChatGPT-subscription credential routed through the Codex backend. fidfab never uses
+    # Fabro's OpenAI provider (native nodes run on DeepSeek, Codex stages use
+    # CODEX_AUTH_JSON_B64), so skip LLM setup with the scripted install (flags hidden from
+    # `fabro install --help`); the deepseek step configures the model. Fall back to the
+    # wizard when gh is unavailable or the flags stop working after the upgrade above.
+    local login
+    if login="$(gh api user --jq .login 2>/dev/null)" \
+      && fabro install --no-upgrade-check --non-interactive --skip-llm --github-strategy token --github-username "$login"; then
+      note "Scripted install done: GitHub token from gh ($login), LLM provider skipped."
+    else
+      note "Scripted install unavailable (gh missing, not logged in, offline, or flags changed);"
+      note "running the interactive wizard (LLM provider, GitHub, local server)."
+      note "Answer No to 'Configure LLM providers now?' (scripts/setup.sh deepseek sets the model), and"
+      note "in particular No to 'OpenAI (Codex) detected. Set up OpenAI with device code login?':"
+      note "fidfab does not use Fabro's OpenAI provider; Codex stages authenticate with CODEX_AUTH_JSON_B64."
+      fabro install
+    fi
   fi
   if ! fabro server status --no-upgrade-check >/dev/null 2>&1; then
     fabro server start --no-upgrade-check >/dev/null 2>&1 || true

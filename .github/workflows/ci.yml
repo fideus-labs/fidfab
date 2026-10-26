@@ -30,6 +30,8 @@ jobs:
         run: scripts/sync-components.sh --check
       - name: fabro validate
         run: tests/validate-workflows.sh
+      - name: setup.sh skips the LLM wizard step
+        run: tests/test-setup.sh
       - name: shellcheck
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q shellcheck >/dev/null
