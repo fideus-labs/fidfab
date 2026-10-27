@@ -4,10 +4,10 @@
 #
 # A locally built Ubuntu 24.04 image that Fabro uses as its Docker sandbox.
 # Everything an agent needs is preinstalled so no network installs happen at
-# run time: pixi, Rust, Vite+, Claude Code, Codex, CodeRabbit CLI, the ACP
-# adapters for Claude Code and Codex, Serena (for Claude), cocoindex-code (for
-# Codex), the planning-with-files / CodeRabbit / Cloudflare security skills,
-# and a warmed clone of the target repository.
+# run time: pixi, Rust (with sccache), Vite+, Claude Code, Codex, CodeRabbit
+# CLI, the ACP adapters for Claude Code and Codex, Serena (for Claude),
+# cocoindex-code (for Codex), the planning-with-files / CodeRabbit / Cloudflare
+# security skills, and a warmed clone of the target repository.
 #
 # Build with ./docker/build.sh (see README.md).
 
@@ -104,8 +104,13 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             --component clippy,rustfmt,rust-src,rust-analyzer \
     && ${CARGO_HOME}/bin/rustup target add wasm32-unknown-unknown wasm32-wasip1
 ENV PATH="${CARGO_HOME}/bin:${PATH}"
-RUN cargo install --locked cargo-nextest cargo-llvm-cov cargo-deny cargo-audit wasm-pack \
+RUN cargo install --locked cargo-nextest cargo-llvm-cov cargo-deny cargo-audit wasm-pack sccache \
     && rm -rf ${CARGO_HOME}/registry/cache
+# sccache wraps rustc so compiled crates are reused across checkouts; the warm
+# build at the end of this file fills it.
+ENV RUSTC_WRAPPER=sccache \
+    SCCACHE_DIR=/opt/fidfab/cache/sccache \
+    SCCACHE_CACHE_SIZE=25G
 
 # ---------------------------------------------------------------------------
 # Vite+ (https://vite.plus) — unified JS/TS toolchain (`vp`)
