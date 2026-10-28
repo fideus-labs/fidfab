@@ -3,7 +3,9 @@
 set -euo pipefail
 fail=0
 check() { if "$@" >/dev/null 2>&1; then echo "[tools] ok   $*"; else echo "[tools] FAIL $*"; fail=1; fi; }
-check bash -c '. /etc/os-release && [ "$VERSION_ID" = "24.04" ]'
+# UBUNTU_VERSION mirrors the docker/build.sh override (the ubuntu image tag, so a release
+# number or a codename); tests/test-image.sh passes it through.
+check bash -c '. /etc/os-release && want="${UBUNTU_VERSION:-26.04}" && { [ "$VERSION_ID" = "$want" ] || [ "$VERSION_CODENAME" = "$want" ]; }'
 check pixi --version
 check rustc --version
 check cargo --version
@@ -16,6 +18,11 @@ check uv --version
 check serena --version
 check ccc version
 check gh --version
+check docker --version
+check docker buildx version
+check docker compose version
+# The Docker CE apt suite follows the base image release, so UBUNTU_VERSION overrides work.
+check bash -c '. /etc/os-release && grep -Eq " ${VERSION_CODENAME} stable\$" /etc/apt/sources.list.d/docker.list'
 check claude --version
 check codex --version
 check coderabbit --version

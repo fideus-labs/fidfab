@@ -2,7 +2,7 @@
 #
 # fidfab sandbox image
 #
-# A locally built Ubuntu 24.04 image that Fabro uses as its Docker sandbox.
+# A locally built Ubuntu 26.04 image that Fabro uses as its Docker sandbox.
 # Everything an agent needs is preinstalled so no network installs happen at
 # run time: pixi, Rust (with sccache), Vite+, Claude Code, Codex, CodeRabbit
 # CLI, the ACP adapters for Claude Code and Codex, Serena (for Claude),
@@ -11,7 +11,7 @@
 #
 # Build with ./docker/build.sh (see README.md).
 
-ARG UBUNTU_VERSION=24.04
+ARG UBUNTU_VERSION=26.04
 FROM ubuntu:${UBUNTU_VERSION}
 
 # Build arguments are declared just above the step that uses them: every RUN
@@ -50,10 +50,12 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# Docker CLI (for workflows that build or run containers from inside the sandbox)
+# Docker CLI (for workflows that build or run containers from inside the sandbox).
+# The apt suite is the base image's codename so UBUNTU_VERSION stays a real override.
 RUN install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" \
+    && codename="$(. /etc/os-release && echo "$VERSION_CODENAME")" \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${codename} stable" \
         > /etc/apt/sources.list.d/docker.list \
     && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
