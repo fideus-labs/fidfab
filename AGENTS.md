@@ -36,6 +36,11 @@ a Docker sandbox image and tests. Keep the following in mind.
   mis-prefix prompt paths).
 - `{{ secrets.* }}` is only valid inside `[run.environment.env]`; `{{ env.* }}` is not supported.
 - Human gate free text appears to downstream nodes as `human.gate.text`.
+- `[environments.*]` tables in `workflow.toml` only serve `fabro validate`; they are not sent to
+  the server, and `fabro run` ignores `[run.environment] id` (Fabro 0.396). The environment must
+  be in the server catalog (`scripts/setup.sh environment`) and selected with
+  `--environment fidfab`, else runs silently use `default` (`buildpack-deps:noble`).
+  `[run.environment.image]` is not honoured as a run-level override; `resources` and `lifecycle` are.
 
 ## Style
 
