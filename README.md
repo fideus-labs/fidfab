@@ -247,7 +247,8 @@ CLAUDE_CODE_OAUTH_TOKEN=… CODEX_AUTH_JSON_B64=… CODERABBIT_API_KEY=… tests
 
 Without credentials the tests check installation and the ACP `initialize` handshake. With
 credentials they run an authenticated `session/prompt` round-trip against each agent and
-`coderabbit auth status`.
+`coderabbit auth status`. If the image was built with `UBUNTU_VERSION=…`, run the tests with
+the same variable set so the release check expects that version.
 
 ### 7. Register the environment and run the doctor
 

@@ -7,7 +7,7 @@ hard-coded 24.04/noble reference (Dockerfile, tests, docs, lint config) updated 
 
 ## Next Step
 
-Done. All phases complete; see progress.md for verification results.
+Implementation done. Unverified here: `tests/validate-workflows.sh`, hadolint and the image build/test (see progress.md). CI runs validate-workflows and hadolint on every push; the image job runs on `workflow_dispatch` with `build_image=true`.
 
 ## Current Phase
 
@@ -26,18 +26,19 @@ Phase 4
 
 - [x] Bump `UBUNTU_VERSION` default in `docker/Dockerfile`
 - [x] Derive the Docker CE apt suite from `/etc/os-release` instead of hard-coding `noble`
-- [x] Update `tests/test-tools.sh` VERSION_ID check
+- [x] Update `tests/test-tools.sh` VERSION_ID check (expects `${UBUNTU_VERSION:-26.04}`; `tests/test-image.sh` passes `UBUNTU_VERSION` through)
 - [x] Update README, Dockerfile comment and `.hadolint.yaml` comment
 - **Status:** complete
 
 ### Phase 3: Verification
 
-- [x] `tests/validate-workflows.sh`, `scripts/sync-components.sh --check`
+- [x] `scripts/sync-components.sh --check`
+- [ ] `tests/validate-workflows.sh` (skipped: `fabro` is not installed in the sandbox; no `.fabro` or `workflow.toml` changed)
 - [x] `shellcheck -S warning` on all shell scripts; `node --check tests/acp-smoke.mjs`
-- [x] hadolint on the Dockerfile (if available)
+- [ ] hadolint on the Dockerfile (skipped: not installed; the edited RUN body passed `shellcheck` and `bash -n`)
 - [x] Verify the apt packages the Dockerfile installs exist in the 26.04 archive
-- [x] `docker/build.sh && tests/test-image.sh` if a Docker daemon is available (it is not in this sandbox)
-- **Status:** complete
+- [ ] `docker/build.sh && tests/test-image.sh` (skipped: no Docker daemon in this sandbox)
+- **Status:** complete with skipped checks (see progress.md)
 
 ### Phase 4: Delivery
 
@@ -50,9 +51,10 @@ Phase 4
 |-----------|------|
 | `docker/Dockerfile` defaults to `ubuntu:26.04` | yes |
 | No apt source hard-codes the `noble` suite; the suite follows the base image | yes |
-| `tests/test-tools.sh` asserts `VERSION_ID=26.04` | yes |
+| `tests/test-tools.sh` asserts `VERSION_ID=26.04` by default and follows a `UBUNTU_VERSION` override | yes |
 | README, Dockerfile header and `.hadolint.yaml` no longer say 24.04 | yes |
-| Offline checks pass (validate-workflows, sync-components --check, shellcheck, node --check, hadolint) | yes |
+| Offline checks pass: sync-components --check, shellcheck, node --check | yes |
+| `tests/validate-workflows.sh` and hadolint | not verified: `fabro` and hadolint are not installed in the sandbox (no `.fabro`/`workflow.toml` changed) |
 | Image builds and `tests/test-image.sh` passes | not verifiable here: no Docker daemon in the sandbox. Packages, base image tag and apt suites were verified against the upstream indexes instead; see findings.md |
 
 ## Decisions Made

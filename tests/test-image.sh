@@ -9,13 +9,15 @@
 # authenticated variants of the tests run:
 #   CLAUDE_CODE_OAUTH_TOKEN / ANTHROPIC_API_KEY, CODEX_AUTH_JSON_B64 /
 #   OPENAI_API_KEY, CODERABBIT_API_KEY / CODERABBIT_REGION.
+# UBUNTU_VERSION is passed through too, so an image built with that override
+# is checked against the release it was built from.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 image="${1:-fidfab:latest}"; shift || true
 tests=("$@"); [[ ${#tests[@]} -eq 0 ]] && tests=(tools coderabbit claude-acp codex-acp)
 
 envs=()
-for v in CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY CODEX_AUTH_JSON_B64 OPENAI_API_KEY CODERABBIT_API_KEY CODERABBIT_REGION FIDFAB_MODEL_OPUS FIDFAB_MODEL_FABLE FIDFAB_MODEL_LUNA; do
+for v in UBUNTU_VERSION CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY CODEX_AUTH_JSON_B64 OPENAI_API_KEY CODERABBIT_API_KEY CODERABBIT_REGION FIDFAB_MODEL_OPUS FIDFAB_MODEL_FABLE FIDFAB_MODEL_LUNA; do
   [[ -n "${!v:-}" ]] && envs+=(-e "$v")
 done
 

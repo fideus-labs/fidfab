@@ -13,6 +13,8 @@
 
 - **Status:** complete
 - Files modified: `docker/Dockerfile`, `tests/test-tools.sh`, `README.md`, `.hadolint.yaml`.
+- Codex review: the release check now expects `${UBUNTU_VERSION:-26.04}` and
+  `tests/test-image.sh` passes `UBUNTU_VERSION` through (also `tests/test-image.sh`, README).
 
 ### Phase 3: Verification
 

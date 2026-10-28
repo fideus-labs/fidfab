@@ -3,7 +3,8 @@
 set -euo pipefail
 fail=0
 check() { if "$@" >/dev/null 2>&1; then echo "[tools] ok   $*"; else echo "[tools] FAIL $*"; fail=1; fi; }
-check bash -c '. /etc/os-release && [ "$VERSION_ID" = "26.04" ]'
+# UBUNTU_VERSION mirrors the docker/build.sh override; tests/test-image.sh passes it through.
+check bash -c '. /etc/os-release && [ "$VERSION_ID" = "${UBUNTU_VERSION:-26.04}" ]'
 check pixi --version
 check rustc --version
 check cargo --version
