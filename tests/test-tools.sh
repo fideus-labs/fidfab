@@ -3,8 +3,9 @@
 set -euo pipefail
 fail=0
 check() { if "$@" >/dev/null 2>&1; then echo "[tools] ok   $*"; else echo "[tools] FAIL $*"; fail=1; fi; }
-# UBUNTU_VERSION mirrors the docker/build.sh override; tests/test-image.sh passes it through.
-check bash -c '. /etc/os-release && [ "$VERSION_ID" = "${UBUNTU_VERSION:-26.04}" ]'
+# UBUNTU_VERSION mirrors the docker/build.sh override (the ubuntu image tag, so a release
+# number or a codename); tests/test-image.sh passes it through.
+check bash -c '. /etc/os-release && want="${UBUNTU_VERSION:-26.04}" && { [ "$VERSION_ID" = "$want" ] || [ "$VERSION_CODENAME" = "$want" ]; }'
 check pixi --version
 check rustc --version
 check cargo --version
