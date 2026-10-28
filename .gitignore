@@ -5,3 +5,5 @@
 .DS_Store
 # rendered graphs are committed; ignore temporary renders
 docs/graphs/*.tmp.svg
+
+.serena/
