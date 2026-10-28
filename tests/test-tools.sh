@@ -3,7 +3,7 @@
 set -euo pipefail
 fail=0
 check() { if "$@" >/dev/null 2>&1; then echo "[tools] ok   $*"; else echo "[tools] FAIL $*"; fail=1; fi; }
-check bash -c '. /etc/os-release && [ "$VERSION_ID" = "24.04" ]'
+check bash -c '. /etc/os-release && [ "$VERSION_ID" = "26.04" ]'
 check pixi --version
 check rustc --version
 check cargo --version

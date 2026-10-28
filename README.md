@@ -6,7 +6,7 @@ fidfab is a set of [Fabro](https://fabro.sh) workflows, reusable workflow compon
 locally built Docker sandbox for human-driven, aligned agentic development of scientific
 software. It emphasises **understanding** (plans and roadmaps you read and approve before code
 is written), **verification** (coverage checks, multiple independent reviews, security and
-personal-data audits, CI stewardship), and **reproducibility** (a pinned Ubuntu 24.04 image,
+personal-data audits, CI stewardship), and **reproducibility** (a pinned Ubuntu 26.04 image,
 pixi and Rust toolchains, every step recorded in the Fabro run log).
 
 Everything runs on your workstation: a local Fabro server, local Docker containers, and
@@ -35,7 +35,7 @@ DeepSeek. The compute-heavy work (compilation, tests) uses the full local machin
  you ──(fabro run / web UI / VS Code)──▶ local Fabro server
                                            │  injects vault secrets, mints a scoped GITHUB_TOKEN
                                            ▼
-                                   docker: fidfab:latest  (Ubuntu 24.04)
+                                   docker: fidfab:latest  (Ubuntu 26.04)
                                    ├── /workspace   clone of the target branch
                                    ├── claude-agent-acp ──▶ Claude Code (fable / opus)   subscription
                                    ├── codex-acp ────────▶ Codex (luna)                  subscription
@@ -173,7 +173,7 @@ docker/build.sh https://github.com/OWNER/REPO main   # with a baked-in clone and
 docker/build.sh git@github.com:OWNER/REPO main       # private repo, cloned with your ssh-agent
 ```
 
-The image starts from `ubuntu:24.04` and installs, in this order:
+The image starts from `ubuntu:26.04` and installs, in this order:
 [pixi](https://pixi.sh) (environments detached under `/opt/fidfab/cache/pixi-envs`),
 Rust via rustup with `cargo-nextest`, `cargo-llvm-cov`, `cargo-deny`, `cargo-audit`,
 `wasm-pack` and [sccache](https://github.com/mozilla/sccache) as `RUSTC_WRAPPER` (25 GB local
@@ -421,7 +421,7 @@ components/              canonical Fabro subgraphs and prompts (edit here)
   project.toml           Fabro project metadata
   workflows/<name>/      workflow.toml + workflow.fabro + vendored components/ (generated)
 docker/
-  Dockerfile             ubuntu:24.04 sandbox image
+  Dockerfile             ubuntu:26.04 sandbox image
   build.sh               local build with optional baked-in target repository
   config/                Claude Code and Codex settings baked into the image
   rootfs/usr/local/bin/  fidfab-* helpers used by the workflows
