@@ -37,7 +37,7 @@ ensure_toml_block() { # marker, heredoc on stdin
   local marker="$1" body
   body="$(cat)"
   mkdir -p "$(dirname "$SETTINGS")"; touch "$SETTINGS"
-  if grep -q "$marker" "$SETTINGS"; then
+  if grep -qF -- "$marker" "$SETTINGS"; then
     note "$SETTINGS already contains $marker"
   else
     printf '\n%s\n' "$body" >> "$SETTINGS"
@@ -170,6 +170,7 @@ preserve = false
 stop_on_terminal = true
 EOF
   fabro server restart --no-upgrade-check >/dev/null 2>&1 || true
+  note "Select it per run: fabro run <workflow> --environment fidfab (Fabro ignores the workflow's run.environment.id)."
 }
 
 step_doctor() {

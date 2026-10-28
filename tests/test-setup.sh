@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # test-setup.sh — host-side check that `scripts/setup.sh fabro` skips Fabro's LLM wizard
 # step (and with it the "OpenAI (Codex) detected" device-login prompt) whenever gh is
-# logged in, and falls back to the interactive wizard otherwise. Stubs fabro and gh.
+# logged in, and falls back to the interactive wizard otherwise, and that the environment
+# step writes its settings.toml block exactly once. Stubs fabro and gh.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -43,5 +44,11 @@ install"
 mkdir -p "$tmp/home/.fabro"; : > "$tmp/home/.fabro/settings.toml"
 scripts/setup.sh fabro >/dev/null
 check "settings.toml present -> no install" ""
+
+# ensure_toml_block must match its marker literally: as a regex, "[environments.fidfab]" is
+# a bracket expression that matches almost any line, which made the step a silent no-op.
+scripts/setup.sh environment >/dev/null; scripts/setup.sh environment >/dev/null
+n="$(grep -cF '[environments.fidfab]' "$tmp/home/.fabro/settings.toml")"
+if [[ "$n" == 1 ]]; then echo "ok   environment step appends its block once"; else echo "FAIL environment step: $n blocks"; fail=1; fi
 
 exit "$fail"

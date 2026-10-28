@@ -251,10 +251,23 @@ credentials they run an authenticated `session/prompt` round-trip against each a
 
 ### 7. Register the environment and run the doctor
 
-`workflow.toml` declares the `fidfab` Docker environment itself, so the workflows run as soon
-as the image exists. To make it visible server-wide (for the web UI and your own workflows),
-`scripts/setup.sh environment` appends the same `[environments.fidfab]` table to
-`~/.fabro/settings.toml`.
+The workflows select the server-managed environment `fidfab` (`[run.environment] id` in each
+`workflow.toml`). Fabro reads `[environments.*]` tables only from the server's
+`~/.fabro/settings.toml`, never from a workflow, so this step is required:
+`scripts/setup.sh environment` appends the table below and restarts the server, which moves it
+into its persisted environment catalog (the block then disappears from `settings.toml`).
+
+```toml
+[environments.fidfab]
+provider = "docker"
+
+[environments.fidfab.image]
+docker = "fidfab:latest"
+```
+
+Each run then has to select it with `--environment fidfab` (see Running workflows). Without
+both, Fabro silently falls back to its `default` environment (`buildpack-deps:noble`) and the
+first stage fails with `fidfab-bootstrap: command not found`.
 
 ```bash
 fabro doctor
@@ -269,16 +282,20 @@ From a checkout that contains fidfab (this repository, a subtree, or a copy of
 `.fabro/workflows/<name>/`):
 
 ```bash
-fabro run small  --goal "Add a --threads flag to the converter; default to the CPU count"
-fabro run medium --goal-file task.md -I plan_slug=2026-10-24-threads
-fabro run large  --goal "Roadmap for streaming OME-Zarr writes" -I plans_dir=docs/roadmap
-fabro run verify --goal "Verify the current branch"
+fabro run small  --environment fidfab --goal "Add a --threads flag to the converter; default to the CPU count"
+fabro run medium --environment fidfab --goal-file task.md -I plan_slug=2026-10-24-threads
+fabro run large  --environment fidfab --goal "Roadmap for streaming OME-Zarr writes" -I plans_dir=docs/roadmap
+fabro run verify --environment fidfab --goal "Verify the current branch"
 ```
+
+`--environment fidfab` is required: Fabro (0.396) ignores the `[run.environment] id` declared in
+`workflow.toml` when the flag is omitted and runs in its `default` image, where the first stage
+fails with `fidfab-bootstrap: command not found`.
 
 Against another repository, from anywhere:
 
 ```bash
-fabro run fideus-labs/fidfab:small --goal-file task.md --target OWNER/REPO@feature-branch
+fabro run fideus-labs/fidfab:small --environment fidfab --goal-file task.md --target OWNER/REPO@feature-branch
 ```
 
 Human gates (plan and roadmap approvals) are answered in the terminal when `fabro run` is
@@ -300,7 +317,7 @@ git worktree add ../repo-threads -b threads
 cd ../repo-threads && claude
 # 2. Push the branch and let the factory verify, review, and steward it:
 git push -u origin threads
-fabro run verify --goal "Verify and land the threads branch" --target OWNER/REPO@threads
+fabro run verify --environment fidfab --goal "Verify and land the threads branch" --target OWNER/REPO@threads
 ```
 
 Or start the prompt in fabro with `small`/`medium` and, if you want to take over by hand,
@@ -316,7 +333,7 @@ git subtree add --prefix fidfab https://github.com/fideus-labs/fidfab.git main -
 mkdir -p .fabro/workflows/small
 cp fidfab/.fabro/workflows/small/workflow.{toml,fabro} .fabro/workflows/small/
 fidfab/scripts/sync-components.sh .fabro/workflows/small     # vendors components/ beside the graph
-fabro run small --goal "…"
+fabro run small --environment fidfab --goal "…"
 # later
 git subtree pull --prefix fidfab https://github.com/fideus-labs/fidfab.git main --squash
 ```
@@ -428,6 +445,9 @@ docs/graphs/             rendered workflow graphs
   vendored per workflow (`scripts/sync-components.sh`). Nested imports (a component importing
   a component) are avoided for the same reason.
 - `fabro graph` needs a ready LLM provider on the server before it renders.
+- `fabro run` ignores `[run.environment] id` in `workflow.toml` and uses the server's `default`
+  environment unless `--environment fidfab` is passed (Fabro 0.396); an unknown id is not an
+  error either. `fabro inspect <run>` shows the resolved image under `run.environment.image`.
 - If the install wizard set up OpenAI via Codex device login, run `scripts/setup.sh deepseek`
   so `[run.model]` points at DeepSeek; the ChatGPT-subscription OpenAI credential then stays unused.
   The wizard writes no `[run.model]`; if you added one by hand, the step leaves it alone, so edit it.

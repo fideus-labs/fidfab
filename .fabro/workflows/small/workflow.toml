@@ -4,8 +4,8 @@
 # Run from a checkout of the target repository (the workflow is discovered
 # from .fabro/workflows when fidfab is vendored or subtree'd there), or
 # reference it remotely:
-#   fabro run small --goal "…" -I plan_slug=2026-10-24-my-task
-#   fabro run fideus-labs/fidfab:small --goal-file task.md --target OWNER/REPO@branch
+#   fabro run small --environment fidfab --goal "…" -I plan_slug=2026-10-24-my-task
+#   fabro run fideus-labs/fidfab:small --environment fidfab --goal-file task.md --target OWNER/REPO@branch
 _version = 1
 
 [workflow]
@@ -24,8 +24,12 @@ draft_pr = "false"
 
 # ---------------------------------------------------------------------------
 # Sandbox: the locally built fidfab image (see README "Build the image").
-# The environment is defined here so the workflow is self-describing; a
-# server-managed environment with the same id takes precedence if present.
+# The [environments.fidfab] table below only serves `fabro validate` on this
+# machine: Fabro never sends [environments.*] to the server, and `fabro run`
+# ignores the id below unless it is also passed as `--environment fidfab`
+# (Fabro 0.396). The server needs the same environment in its catalog
+# (`scripts/setup.sh environment`). Otherwise Fabro silently uses its default
+# image, where the first stage fails with "fidfab-bootstrap: command not found".
 # ---------------------------------------------------------------------------
 [run.environment]
 id = "fidfab"

@@ -4,7 +4,9 @@ digraph Bootstrap {
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]
 
-  bootstrap [label="Bootstrap sandbox", script="fidfab-bootstrap", retry_policy="linear"]
+  // Nothing downstream works without credentials and a checkout (for example when the
+  // sandbox is not the fidfab image): stop the run instead of cascading failures.
+  bootstrap [label="Bootstrap sandbox", script="fidfab-bootstrap", retry_policy="linear", on_failure="exit"]
   done      [shape=diamond, label="Bootstrapped"]
 
   start -> bootstrap -> done -> exit
