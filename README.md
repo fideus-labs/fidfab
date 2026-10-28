@@ -125,8 +125,11 @@ export PATH="$HOME/.fabro/bin:$PATH"
 fabro upgrade --prerelease
 fabro install --non-interactive --skip-llm --github-strategy token \
   --github-username "$(gh api user --jq .login)"   # GitHub token from gh, no LLM provider yet
-fabro server start
+(cd ~ && fabro server start)   # never from a checkout: workers inherit the server's cwd
 ```
+
+Start and restart the server from a directory that outlives any checkout. If the directory is
+deleted later, every run fails at once with "Worker exited before emitting a terminal run event".
 
 The installer and the `--prerelease` upgrade channel are documented in the
 [Fabro quick start](https://docs.fabro.sh/getting-started/quick-start). The scripted flags are
@@ -151,7 +154,7 @@ name = "deepseek-v4-flash"
 provider = "deepseek"
 ```
 
-Restart the server (`fabro server restart`) and check with `fabro model test deepseek`.
+Restart the server (`cd ~ && fabro server restart`) and check with `fabro model test deepseek`.
 DeepSeek V4 Flash is the provider default; `deepseek-v4-pro` is available for harder steps
 ([Fabro DeepSeek integration](https://docs.fabro.sh/integrations/deepseek)). Only Fabro-native
 nodes use this model; the Claude Code and Codex stages use your subscriptions.

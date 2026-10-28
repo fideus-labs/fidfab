@@ -17,6 +17,11 @@
 # CLIs' own login stores on this machine).
 set -euo pipefail
 
+SELF="$(cd "$(dirname "$0")" && pwd -P)/$(basename "$0")" # before cd /, so --help can still read this file
+# Fabro workers inherit the server's cwd and fail with "Failed to get current directory"
+# once it is deleted, so never start or restart the server from a (possibly temporary) checkout.
+cd /
+
 export PATH="$HOME/.fabro/bin:$HOME/.local/bin:$PATH"
 FIDFAB_IMAGE="${FIDFAB_IMAGE:-fidfab:latest}"
 SETTINGS="$HOME/.fabro/settings.toml"
@@ -185,7 +190,7 @@ steps=("$@")
 for s in "${steps[@]}"; do
   case "$s" in
     fabro|deepseek|brave|claude|codex|coderabbit|environment|doctor) "step_$s" ;;
-    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,17p' "$SELF"; exit 0 ;;
     *) echo "unknown step: $s" >&2; exit 64 ;;
   esac
   echo

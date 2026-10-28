@@ -41,6 +41,12 @@ a Docker sandbox image and tests. Keep the following in mind.
   be in the server catalog (`scripts/setup.sh environment`) and selected with
   `--environment fidfab`, else runs silently use `default` (`buildpack-deps:noble`).
   `[run.environment.image]` is not honoured as a run-level override; `resources` and `lifecycle` are.
+- Fabro workers inherit the server's cwd. If the server was started from a directory that was
+  later deleted (a removed worktree), every run fails within milliseconds with "Worker exited
+  before emitting a terminal run event" and `~/.fabro/storage/logs/server.log` shows "Failed to
+  get current directory". Check the server's cwd (`readlink /proc/<pid>/cwd` on Linux,
+  `lsof -p <pid> -a -d cwd` on macOS; pid in `~/.fabro/storage/server.json`) and run
+  `fabro server restart` from a stable directory.
 
 ## Style
 
