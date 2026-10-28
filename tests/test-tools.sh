@@ -16,6 +16,11 @@ check uv --version
 check serena --version
 check ccc version
 check gh --version
+check docker --version
+check docker buildx version
+check docker compose version
+# The Docker CE apt suite follows the base image release, so UBUNTU_VERSION overrides work.
+check bash -c '. /etc/os-release && grep -Eq " ${VERSION_CODENAME} stable\$" /etc/apt/sources.list.d/docker.list'
 check claude --version
 check codex --version
 check coderabbit --version
