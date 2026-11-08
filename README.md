@@ -4,7 +4,7 @@
 
 fidfab is a set of [Fabro](https://fabro.sh) workflows, reusable workflow components, and a
 locally built Docker sandbox for human-driven, aligned agentic development of scientific
-software. It emphasises **understanding** (plans and roadmaps you read and approve before code
+software. It emphasizes **understanding** (plans and roadmaps you read and approve before code
 is written), **verification** (coverage checks, multiple independent reviews, security and
 personal-data audits, CI stewardship), and **reproducibility** (a pinned Ubuntu 26.04 image,
 pixi and Rust toolchains, every step recorded in the Fabro run log).
