@@ -312,9 +312,15 @@ When `plan_slug` is left at `task` and the run starts from a topic branch (the c
 current branch, or `--target OWNER/REPO@branch`), the slug becomes the run date and the branch
 name, with `/` replaced by `-`: a run from `feature/threads` on 10 November 2026 writes to
 `docs/plans/2026-11-10-feature-threads/`. The date is the sandbox's (UTC) when the run starts; a
-branch name that already begins with a date is not dated again. Runs from `main`, `master`, `trunk`, `dev`, `develop`, `development`, `release`, `release/*`,
-`release-*`, `stable`, `staging`, `production` or the base branch keep `task`. `fidfab-bootstrap`
-resolves this inside the sandbox and records it as `FIDFAB_PLAN_SLUG` in `.fidfab/run.env`.
+branch name that already begins with a date is not dated again. Runs from `main`, `master`,
+`trunk`, `dev`, `develop`, `development`, `release`, `release/*`, `release-*`, `stable`,
+`staging`, `production` or the base branch keep `task`. `fidfab-bootstrap` resolves this
+inside the sandbox and records it as `FIDFAB_PLAN_SLUG` in `.fidfab/run.env`.
+
+`fidfab-bootstrap` is part of the sandbox image, so rebuild the image after updating fidfab
+([Build the sandbox image](#4-build-the-sandbox-image)). An image older than the workflows
+does not record `FIDFAB_PLAN_SLUG`: the agents then fall back to the plan directory the task
+already has, or `task`, and neither a `-I plan_slug=...` value nor the branch name is used.
 
 ### Interactive Claude Code session first, then the factory
 

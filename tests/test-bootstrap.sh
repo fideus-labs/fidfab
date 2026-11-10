@@ -14,7 +14,10 @@ export HOME="$tmp/home" GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com \
   GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
 
 fail=0; n=0
-check() { # name, expected slug, checkouts after main (created when missing), plan_slug input
+# check NAME EXPECTED_SLUG CHECKOUTS PLAN_SLUG_INPUT
+# Replays CHECKOUTS (branches after main, created when missing) in a new repository, runs
+# fidfab-bootstrap with the plan_slug input, and compares the slug it records.
+check() {
   local repo="$tmp/repo$((n += 1))" b got
   git init -q -b main "$repo"
   GIT_COMMITTER_DATE=2026-01-02T12:00:00Z git -C "$repo" commit -q --allow-empty -m init
