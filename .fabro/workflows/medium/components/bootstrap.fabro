@@ -6,7 +6,9 @@ digraph Bootstrap {
 
   // Nothing downstream works without credentials and a checkout (for example when the
   // sandbox is not the fidfab image): stop the run instead of cascading failures.
-  bootstrap [label="Bootstrap sandbox", script="fidfab-bootstrap", retry_policy="linear", on_failure="exit"]
+  // The importing workflow must define the plan_slug input ("task" lets fidfab-bootstrap
+  // derive the slug from the topic branch); every stage reads it back as $FIDFAB_PLAN_SLUG.
+  bootstrap [label="Bootstrap sandbox", script="FIDFAB_PLAN_SLUG={{ inputs.plan_slug }} fidfab-bootstrap", retry_policy="linear", on_failure="exit"]
   done      [shape=diamond, label="Bootstrapped"]
 
   start -> bootstrap -> done -> exit

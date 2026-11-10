@@ -20,6 +20,7 @@ a Docker sandbox image and tests. Keep the following in mind.
 
 - `tests/validate-workflows.sh` must pass after any change to a `.fabro` or `workflow.toml`.
 - `scripts/sync-components.sh --check` must pass.
+- `tests/test-bootstrap.sh` must pass after any change to `fidfab-bootstrap`.
 - `shellcheck -S warning` on all shell scripts; `node --check tests/acp-smoke.mjs`.
 - If `docker` is available, `docker/build.sh && tests/test-image.sh` is the full check.
 
@@ -36,6 +37,13 @@ a Docker sandbox image and tests. Keep the following in mind.
   mis-prefix prompt paths).
 - `{{ secrets.* }}` is only valid inside `[run.environment.env]`; `{{ env.* }}` is not supported.
 - Human gate free text appears to downstream nodes as `human.gate.text`.
+- Prompts and `script=` are rendered once, when the run is created, from `goal`, `inputs` and
+  `vars` only (`script=` takes plain `{{ inputs.NAME }}` substitution, shell-quoted). Anything
+  known only inside the sandbox, such as the plan slug derived from the branch, is recorded by
+  `fidfab-bootstrap` in `.fidfab/run.env` and read by later stages as `$FIDFAB_*`.
+- In the sandbox HEAD is `fabro/run/<id>`. The branch the run started from exists as a local
+  branch, but only the HEAD reflog (`checkout: moving from <branch> to fabro/run/<id>`) says
+  which one it is; Fabro exports no variable for it.
 - `[environments.*]` tables in `workflow.toml` only serve `fabro validate`; they are not sent to
   the server, and `fabro run` ignores `[run.environment] id` (Fabro 0.396). The environment must
   be in the server catalog (`scripts/setup.sh environment`) and selected with

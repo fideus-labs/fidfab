@@ -32,6 +32,8 @@ jobs:
         run: tests/validate-workflows.sh
       - name: setup.sh skips the LLM wizard step
         run: tests/test-setup.sh
+      - name: fidfab-bootstrap derives the plan slug from the topic branch
+        run: tests/test-bootstrap.sh
       - name: shellcheck
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q shellcheck >/dev/null

@@ -83,7 +83,7 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 
 | Component | What it does |
 |---|---|
-| `bootstrap.fabro` | Materialises credentials, ensures the checkout (deepens Fabro's shallow clone, or clones from the image's baked-in repo), attaches warm caches, records base/head refs |
+| `bootstrap.fabro` | Materialises credentials, ensures the checkout (deepens Fabro's shallow clone, or clones from the image's baked-in repo), attaches warm caches, records base/head refs and the plan slug |
 | `coverage.fabro` | opus checks the diff for uncovered behaviour and adds tests |
 | `coderabbit-review.fabro` | `coderabbit review --agent`; if unavailable, waits 3 minutes and retries, then falls back to Claude's built-in code review; opus fixes issues following section "4. Fix Issues (Autonomous Workflow)" of the [CodeRabbit code-review skill](https://github.com/coderabbitai/skills) |
 | `codex-review.fabro` | Codex (luna) review with the prioritised review prompt, then opus verifies and addresses, writing `docs/plans/<slug>/review-codex.md` |
@@ -308,6 +308,14 @@ attached, or in the run page of the Fabro web UI; type feedback to request a rev
 Inputs (`-I key=value`): `plans_dir` (default `docs/plans`, `docs/roadmap` for `large`),
 `plan_slug` (default `task`), `draft_pr` (`true`/`false`).
 
+When `plan_slug` is left at `task` and the run starts from a topic branch (the checkout's
+current branch, or `--target OWNER/REPO@branch`), the slug becomes the run date and the branch
+name, with `/` replaced by `-`: a run from `feature/threads` on 10 November 2026 writes to
+`docs/plans/2026-11-10-feature-threads/`. The date is the sandbox's (UTC) when the run starts; a
+branch name that already begins with a date is not dated again. Runs from `main`, `master`, `trunk`, `dev`, `develop`, `development`, `release`, `release/*`,
+`release-*`, `stable`, `staging`, `production` or the base branch keep `task`. `fidfab-bootstrap`
+resolves this inside the sandbox and records it as `FIDFAB_PLAN_SLUG` in `.fidfab/run.env`.
+
 ### Interactive Claude Code session first, then the factory
 
 Many tasks start as an exploratory conversation. The sandbox supports both orders:
@@ -352,6 +360,9 @@ digraph Mine {
   start -> bootstrap -> build -> codex -> ship -> exit
 }
 ```
+
+`bootstrap.fabro` reads the `plan_slug` input, so the workflow's `[run.inputs]` must define it
+(`plan_slug = "task"`).
 
 **Remote reference**: `fabro run fideus-labs/fidfab@main:medium …` resolves to
 `.fabro/workflows/medium/` in this repository without any local copy.
@@ -400,6 +411,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 | `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow |
 | `scripts/sync-components.sh --check` | host, CI | vendored components match `components/` |
 | `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard (stubbed `fabro`/`gh`) |
+| `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |
 | `tests/test-coderabbit.sh` | image | CLI installed; with `CODERABBIT_API_KEY`, `auth login` and `auth status --agent` succeed |
 | `tests/test-claude-acp.sh` | image | ACP `initialize` handshake; with a token, a full `session/prompt` round-trip returns the expected marker |

@@ -1,6 +1,6 @@
 # Implement the approved plan
 
-The human approved `{{ inputs.plans_dir }}/{{ inputs.plan_slug }}/task_plan.md`. Implement
+The human approved `{{ inputs.plans_dir }}/$FIDFAB_PLAN_SLUG/task_plan.md`. Implement
 it phase by phase, following the **planning-with-files** skill:
 
 1. Re-read `task_plan.md`, `findings.md` and `progress.md` before starting.

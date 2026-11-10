@@ -17,7 +17,9 @@ graph = "workflow.fabro"
 # Directory (relative to the repository root) for planning artifacts:
 # task_plan.md / findings.md / progress.md, or the roadmap documents.
 plans_dir = "docs/roadmap"
-# Sub-directory for this task's artifacts, e.g. -I plan_slug=2026-10-24-chunk-cache
+# Sub-directory for this task's artifacts, e.g. -I plan_slug=2026-10-24-chunk-cache.
+# Left at "task", a run started from a topic branch (not main, master, dev, release, …)
+# uses <date>-<branch> instead, e.g. 2026-11-10-chunk-cache, with "/" replaced by "-".
 plan_slug = "task"
 # Open the pull request as a draft ("true" / "false").
 draft_pr = "false"
