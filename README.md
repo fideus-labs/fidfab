@@ -98,7 +98,7 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 
 ### Prerequisites
 
-- Linux or macOS workstation with Docker (daemon running, your user can access the socket)
+- Linux or macOS workstation with Docker (daemon running, your user can access the socket), or Windows WSL with Docker Desktop
 - A GitHub account with push access to the target repository, logged in with the `gh` CLI
   (`gh auth login`; `fabro install` takes its GitHub token from `gh auth token`)
 - Subscriptions or keys: Claude Pro/Max (for Claude Code), ChatGPT Plus/Pro or an OpenAI API key
