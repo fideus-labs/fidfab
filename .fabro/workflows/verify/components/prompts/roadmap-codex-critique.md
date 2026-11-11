@@ -1,7 +1,8 @@
 # Roadmap critique (independent second opinion)
 
 Read the roadmap documents under `{{ inputs.plans_dir }}/$FIDFAB_PLAN_SLUG/`
-(`FIDFAB_PLAN_SLUG` is set in your shell and recorded in `.fidfab/run.env`) and the
+(`FIDFAB_PLAN_SLUG` is set in your shell and recorded in `.fidfab/run.env`; if it is unset,
+use the roadmap directory this task already has under `{{ inputs.plans_dir }}/`) and the
 relevant parts of the code base (use `ccc` for semantic search). Critique the roadmap as a
 senior research software engineer would:
 
