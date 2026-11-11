@@ -4,7 +4,7 @@ Produce a research-backed development roadmap for:
 
 > {{ goal }}
 
-Write it as a set of markdown documents under `{{ inputs.plans_dir }}/{{ inputs.plan_slug }}/`:
+Write it as a set of markdown documents under `{{ inputs.plans_dir }}/$FIDFAB_PLAN_SLUG/`:
 
 - `README.md` — the roadmap index: vision, scope and non-goals, guiding principles,
   ordered list of work items with one-line summaries, dependency graph between items

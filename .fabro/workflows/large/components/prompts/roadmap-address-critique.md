@@ -2,7 +2,7 @@
 
 Read `.fidfab/reviews/roadmap-critique.md`. For each finding, verify it against the
 roadmap and the code base, then either revise the roadmap documents under
-`{{ inputs.plans_dir }}/{{ inputs.plan_slug }}/` or explain in
+`{{ inputs.plans_dir }}/$FIDFAB_PLAN_SLUG/` or explain in
 `.fidfab/reviews/roadmap-critique-response.md` why no change is warranted. Record the
 decision and approach per finding in that response file.
 

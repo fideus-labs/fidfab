@@ -5,7 +5,7 @@ Implement the following task end to end in this repository:
 > {{ goal }}
 
 Use the **planning-with-files** skill in its lightweight form: create
-`{{ inputs.plans_dir }}/{{ inputs.plan_slug }}/task_plan.md` with the goal, a short phase
+`{{ inputs.plans_dir }}/$FIDFAB_PLAN_SLUG/task_plan.md` with the goal, a short phase
 list and acceptance criteria before you change code, keep `progress.md` beside it as you
 go, and record anything you learn that a future reader needs in `findings.md`. Keep these
 files short; the point is a reproducible record, not ceremony.

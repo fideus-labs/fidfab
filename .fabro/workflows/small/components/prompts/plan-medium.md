@@ -4,7 +4,7 @@ Create an implementation plan for this task using the **planning-with-files** sk
 
 > {{ goal }}
 
-Write the artifacts to `{{ inputs.plans_dir }}/{{ inputs.plan_slug }}/`:
+Write the artifacts to `{{ inputs.plans_dir }}/$FIDFAB_PLAN_SLUG/`:
 
 - `task_plan.md` — goal, context, numbered phases with concrete steps, risks and open
   questions, and explicit **acceptance criteria** (observable, testable statements).

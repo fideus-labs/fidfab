@@ -1,6 +1,6 @@
 # Revise the plan
 
-The human reviewer has read `{{ inputs.plans_dir }}/{{ inputs.plan_slug }}/task_plan.md`
+The human reviewer has read `{{ inputs.plans_dir }}/$FIDFAB_PLAN_SLUG/task_plan.md`
 and asked for changes. Their feedback is in the preamble above under `human.gate.text`.
 
 Update `task_plan.md` (and `findings.md` if new research was needed) to address every

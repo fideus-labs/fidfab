@@ -9,11 +9,13 @@
 #    disabled) the baked-in clone under $FIDFAB_REPO is used as the source.
 # 3. Attaches the warm caches baked into the image (cargo target dir, pixi
 #    environments, node_modules) so compilation and test runs start hot.
-# 4. Records base/head refs for later diff-oriented stages.
+# 4. Records base/head refs for later diff-oriented stages, and the plan slug:
+#    $FIDFAB_PLAN_SLUG (the plan_slug input), or <date>-<topic branch the run
+#    started from> when that is still the default "task".
 #
 # Idempotent: safe to re-run after a resume or rewind.
 #
-# Usage: fidfab-bootstrap [--credentials-only]
+# Usage: [FIDFAB_PLAN_SLUG=<slug>] fidfab-bootstrap [--credentials-only]
 #   --credentials-only   stop after step 1 (used by the VS Code dev container).
 set -euo pipefail
 CREDENTIALS_ONLY=0
@@ -141,14 +143,42 @@ fi
 git fetch --quiet origin "$BASE_BRANCH" 2>/dev/null || true
 MERGE_BASE="$(git merge-base HEAD "origin/$BASE_BRANCH" 2>/dev/null || git rev-parse HEAD)"
 
+# Plan slug: prompts are rendered when the run is created, before the branch is known,
+# so a plan_slug input left at its default "task" is replaced here by <date>-<topic branch>.
+PLAN_SLUG="${FIDFAB_PLAN_SLUG:-task}"
+if [[ "$PLAN_SLUG" == task ]]; then
+  topic="$(git rev-parse --abbrev-ref HEAD)"
+  # The id pattern keeps the branch name, which is repository data, out of the sed script.
+  if [[ "$topic" =~ ^fabro/run/[A-Za-z0-9_-]+$ ]]; then
+    # Fabro works on fabro/run/<id>; only the HEAD reflog names the branch it was created
+    # from. The oldest such entry wins, so later checkouts by an agent do not change it.
+    topic="$(git reflog --format=%gs | sed -n "s|^checkout: moving from \(.*\) to $topic\$|\1|p" | tail -n1 || true)"
+    git show-ref --verify --quiet "refs/heads/$topic" || topic=""   # a detached commit is not a branch
+  fi
+  case "$topic" in
+    ''|HEAD|fabro/run/*|"$BASE_BRANCH"|main|master|trunk|dev|develop|development|release|release[/-]*|stable|staging|production) ;;
+    *)
+      PLAN_SLUG="${topic//[^A-Za-z0-9._-]/-}"   # one path component: feature/x -> feature-x
+      if [[ ! "$PLAN_SLUG" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+        # Date prefix (2026-11-10-feature-x) from the oldest HEAD reflog entry, the clone,
+        # so a re-run on a later day keeps the slug.
+        day="$(git reflog --date=short --format=%gd | tail -n1 | tr -cd '0-9-' || true)"
+        PLAN_SLUG="${day:-$(date +%F)}-$PLAN_SLUG"
+      fi
+      ;;
+  esac
+fi
+
 mkdir -p .fidfab
+# Every helper sources this file: %q keeps branch names and the slug inert there.
 cat > .fidfab/run.env <<EOF
-FIDFAB_BASE_BRANCH=$BASE_BRANCH
+FIDFAB_BASE_BRANCH=$(printf '%q' "$BASE_BRANCH")
 FIDFAB_MERGE_BASE=$MERGE_BASE
 FIDFAB_START_HEAD=$(git rev-parse HEAD)
-FIDFAB_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+FIDFAB_BRANCH=$(printf '%q' "$(git rev-parse --abbrev-ref HEAD)")
+FIDFAB_PLAN_SLUG=$(printf '%q' "$PLAN_SLUG")
 EOF
 grep -qxF '.fidfab/' .git/info/exclude 2>/dev/null || echo '.fidfab/' >> .git/info/exclude
 
-log "workspace=$WORKSPACE branch=$(git rev-parse --abbrev-ref HEAD) base=$BASE_BRANCH merge_base=${MERGE_BASE:0:12}"
+log "workspace=$WORKSPACE branch=$(git rev-parse --abbrev-ref HEAD) base=$BASE_BRANCH merge_base=${MERGE_BASE:0:12} plan_slug=$PLAN_SLUG"
 fidfab-doctor --brief || true

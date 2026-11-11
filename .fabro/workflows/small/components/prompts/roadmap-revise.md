@@ -1,6 +1,6 @@
 # Roadmap: revise with human feedback
 
-The human reviewer has read the roadmap in `{{ inputs.plans_dir }}/{{ inputs.plan_slug }}/`
+The human reviewer has read the roadmap in `{{ inputs.plans_dir }}/$FIDFAB_PLAN_SLUG/`
 and asked for changes. Their feedback is in the preamble above under `human.gate.text`.
 
 Address every point: add, remove, split, merge or reorder work items; deepen research

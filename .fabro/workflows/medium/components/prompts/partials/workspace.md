@@ -1,8 +1,12 @@
 ## Workspace conventions
 
 - You are in a git checkout of the target repository inside a disposable fidfab sandbox.
-  The branch under work is the current branch; the base branch and merge base are in
-  `.fidfab/run.env` (`FIDFAB_BASE_BRANCH`, `FIDFAB_MERGE_BASE`).
+  The branch under work is the current branch; the base branch, merge base and plan slug
+  are in `.fidfab/run.env` (`FIDFAB_BASE_BRANCH`, `FIDFAB_MERGE_BASE`,
+  `FIDFAB_PLAN_SLUG`) and set in your shell. Expand `$FIDFAB_PLAN_SLUG` wherever a path
+  in the task uses it. If it is unset (an image older than the workflow, or a forked or
+  rewound run), use the slug of the plan directory this task already has, or `task` when
+  there is none.
 - `fidfab-diff` prints the complete branch diff (merge base → working tree, including
   uncommitted and untracked files). `fidfab-diff --names` lists changed files. Use these
   instead of guessing the scope.
