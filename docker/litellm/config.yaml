@@ -1,0 +1,33 @@
+# LiteLLM proxy configuration for fidfab: Gemini on Vertex AI behind an
+# OpenAI-compatible endpoint that Fabro's built-in `litellm` provider calls.
+#
+# Used by scripts/litellm-proxy.sh, which mounts this file read-only into the
+# proxy container. Everything machine-specific comes from the proxy's env file
+# (~/.config/fidfab-litellm/proxy.env), so this file holds no project IDs or
+# secrets:
+#   LITELLM_MASTER_KEY       bearer key Fabro presents to the proxy (sk-...)
+#   VERTEX_PROJECT           Google Cloud project that is billed for inference
+#   VERTEX_CREDENTIALS_FILE  service-account key, as seen inside the container
+#
+# model_name is what Fabro sends as `api_model` (see docs/vertex-ai-litellm.md).
+model_list:
+  - model_name: gemini-3.8-flash
+    litellm_params:
+      model: vertex_ai/gemini-3.8-flash
+      vertex_project: os.environ/VERTEX_PROJECT
+      vertex_location: global
+      vertex_credentials: os.environ/VERTEX_CREDENTIALS_FILE
+  - model_name: gemini-4-carbon
+    litellm_params:
+      model: vertex_ai/gemini-4-carbon
+      vertex_project: os.environ/VERTEX_PROJECT
+      vertex_location: global
+      vertex_credentials: os.environ/VERTEX_CREDENTIALS_FILE
+
+# Standard pay-as-you-go capacity is shared and can return 429 under load.
+litellm_settings:
+  num_retries: 3
+  request_timeout: 600
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

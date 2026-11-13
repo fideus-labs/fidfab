@@ -19,8 +19,10 @@ digraph FidfabMedium {
   coverage   [import="components/coverage.fabro"]
   coderabbit [import="components/coderabbit-review.fabro"]
   codex      [import="components/codex-review.fabro"]
+  carbon     [import="components/carbon-review.fabro"]
   claude     [import="components/claude-review.fabro"]
   security   [import="components/security-review.fabro"]
+  carbon_security [import="components/carbon-security-review.fabro"]
   personal   [import="components/personal-data-audit.fabro"]
   ship       [import="components/commit-and-pr.fabro"]
   steward    [import="components/pr-steward.fabro"]
@@ -29,6 +31,7 @@ digraph FidfabMedium {
   start -> bootstrap -> plan -> implement -> has_changes
   has_changes -> coverage [label="has-changes"]
   has_changes -> done     [label="no-changes"]
-  coverage -> coderabbit -> codex -> claude -> security -> personal -> ship -> steward -> done
+  coverage -> coderabbit -> codex -> carbon -> claude -> security -> carbon_security
+  carbon_security -> personal -> ship -> steward -> done
   done -> exit
 }

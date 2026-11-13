@@ -1,0 +1,19 @@
+// Component: carbon-security-review
+// Second, independent security review by Gemini 4 Carbon (Vertex AI, through
+// the local LiteLLM proxy) after the Claude security review, then Claude (opus)
+// verifies and addresses each finding. Like carbon-review, the review node is
+// a Fabro-native agent.
+digraph CarbonSecurityReview {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  review  [label="Security review (Gemini 4 Carbon)", class="gemini carbon security",
+           provider="litellm", model="vertex-gemini-4-carbon",
+           prompt="@prompts/security-review-carbon.md"]
+  address [label="Verify & address (Claude opus)", class="claude opus verify",
+           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           prompt="@prompts/address-carbon-security.md"]
+  done    [shape=diamond, label="Carbon security review addressed"]
+
+  start -> review -> address -> done -> exit
+}

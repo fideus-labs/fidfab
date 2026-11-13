@@ -9,9 +9,10 @@
    - a concise, descriptive **title** that summarises the change;
    - a **description** with sections: *What changed*, *Why* (based on the task context:
      "{{ goal }}"), *Implementation notes* (important details, trade-offs, follow-ups),
-     *Verification* (tests added, review stages passed: coverage, CodeRabbit or built-in
-     review, Codex review, Claude review, security review, and the personal-data
-     decision with the audit result when it ran).
+     *Verification* (tests added, review stages that ran: coverage, CodeRabbit or built-in
+     review, Codex review, Gemini 4 Carbon review, Claude review, security review,
+     Gemini 4 Carbon security review, and the personal-data decision with the audit
+     result when it ran).
 4. Update the PR with `gh pr edit <number> --title ... --body-file <file>`.
 5. Post the review records as one PR comment so reviewers can see how each finding was
    handled: concatenate the `*-response.md` files from `.fidfab/reviews/` (abbreviate if

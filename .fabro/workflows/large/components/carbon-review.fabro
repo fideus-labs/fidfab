@@ -1,0 +1,20 @@
+// Component: carbon-review
+// Independent review by Gemini 4 Carbon (Vertex AI, through the local LiteLLM
+// proxy) using the fidfab review priorities, then Claude (opus) verifies and
+// addresses each finding and records the approach. The review node is a
+// Fabro-native agent: Fabro's own tool loop runs on the server, which calls the
+// proxy on localhost, and its tools run in the sandbox.
+digraph CarbonReview {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  review  [label="Review (Gemini 4 Carbon)", class="gemini carbon review",
+           provider="litellm", model="vertex-gemini-4-carbon",
+           prompt="@prompts/review-carbon.md"]
+  address [label="Verify & address (Claude opus)", class="claude opus verify",
+           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           prompt="@prompts/address-carbon.md"]
+  done    [shape=diamond, label="Carbon review addressed"]
+
+  start -> review -> address -> done -> exit
+}

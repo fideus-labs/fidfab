@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Render each workflow graph to docs/graphs/<name>.svg with `fabro graph`.
 # `fabro graph` validates the run configuration first, which requires a ready
-# LLM provider on the local Fabro server (for example the DeepSeek key stored
-# by `scripts/setup.sh deepseek`).
+# LLM provider on the local Fabro server (for example the LiteLLM provider
+# configured by `scripts/setup.sh litellm`).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.fabro/bin:$PATH"

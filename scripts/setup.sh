@@ -5,7 +5,7 @@
 # run on its own with `scripts/setup.sh <step>`):
 #
 #   fabro        install Fabro, upgrade to the latest pre-release, run the install wizard
-#   deepseek     DeepSeek API key + DeepSeek as Fabro's default model
+#   litellm      Fabro's LiteLLM provider for Gemini on Vertex AI (default model)
 #   brave        Brave Search API key for Fabro's web search tool
 #   claude       Claude Code subscription token for the Claude Code ACP agent
 #   codex        Codex (ChatGPT subscription or API key) auth for the Codex ACP agent
@@ -55,9 +55,9 @@ step_fabro() {
   if [[ ! -f "$SETTINGS" ]]; then
     # With `codex` on PATH the wizard offers OpenAI device-code login, which stores a
     # ChatGPT-subscription credential routed through the Codex backend. fidfab never uses
-    # Fabro's OpenAI provider (native nodes run on DeepSeek, Codex stages use
+    # Fabro's OpenAI provider (native nodes run on Gemini through LiteLLM, Codex stages use
     # CODEX_AUTH_JSON_B64), so skip LLM setup with the scripted install (flags hidden from
-    # `fabro install --help`); the deepseek step configures the model. Fall back to the
+    # `fabro install --help`); the litellm step configures the model. Fall back to the
     # wizard when gh is unavailable or the flags stop working after the upgrade above.
     local login
     if login="$(gh api user --jq .login 2>/dev/null)" \
@@ -66,7 +66,7 @@ step_fabro() {
     else
       note "Scripted install unavailable (gh missing, not logged in, offline, or flags changed);"
       note "running the interactive wizard (LLM provider, GitHub, local server)."
-      note "Answer No to 'Configure LLM providers now?' (scripts/setup.sh deepseek sets the model), and"
+      note "Answer No to 'Configure LLM providers now?' (scripts/setup.sh litellm sets the model), and"
       note "in particular No to 'OpenAI (Codex) detected. Set up OpenAI with device code login?':"
       note "fidfab does not use Fabro's OpenAI provider; Codex stages authenticate with CODEX_AUTH_JSON_B64."
       fabro install
@@ -78,21 +78,66 @@ step_fabro() {
   fabro server status --no-upgrade-check || true
 }
 
-step_deepseek() {
-  bold "DeepSeek (Fabro default model)"
-  note "Create a key at https://platform.deepseek.com/api_keys"
-  if ! fabro provider login --provider deepseek --no-upgrade-check 2>/dev/null; then
-    set_secret DEEPSEEK_API_KEY "DeepSeek API key for Fabro prompt/agent nodes"
+step_litellm() {
+  bold "Gemini on Vertex AI through LiteLLM (Fabro default model)"
+  local proxy_env="${FIDFAB_LITELLM_DIR:-$HOME/.config/fidfab-litellm}/proxy.env"
+  local port="${FIDFAB_LITELLM_PORT:-4000}"
+  note "Google Cloud project, service account and proxy: docs/vertex-ai-litellm.md"
+  if ! curl -fsS --max-time 5 "http://127.0.0.1:$port/health/liveliness" >/dev/null 2>&1; then
+    note "No LiteLLM proxy answers on 127.0.0.1:$port. Start it first:"
+    note "  scripts/litellm-proxy.sh init PROJECT_ID && scripts/litellm-proxy.sh start"
   fi
-  ensure_toml_block "[run.model]" <<'EOF'
-# fidfab: DeepSeek as the default model for Fabro-native prompt and agent nodes.
-# ACP stages (Claude Code, Codex) use their own subscriptions and ignore this.
-[run.model]
-name = "deepseek-v4-flash"
-provider = "deepseek"
+  ensure_toml_block "[llm.providers.litellm]" <<EOF
+# fidfab: Fabro's built-in LiteLLM provider, pointed at the local proxy
+# (scripts/litellm-proxy.sh). api_model must match model_name in
+# docker/litellm/config.yaml. The workflows select vertex-gemini-3.8-flash in
+# their workflow.toml [run.model]; the Carbon review nodes pin
+# vertex-gemini-4-carbon. ACP stages (Claude Code, Codex) ignore both.
+[llm.providers.litellm]
+base_url = "http://localhost:$port/v1"
+default_model = "vertex-gemini-3.8-flash"
+enabled = true
+
+[llm.providers.litellm.models."vertex-gemini-3.8-flash"]
+display_name = "Gemini 3.8 Flash (Vertex AI)"
+api_model = "gemini-3.8-flash"
+limits = { context_tokens = 1048576, max_output_tokens = 65536 }
+capabilities = { text = true, tools = true }
+small_default = true
+
+[llm.providers.litellm.models."vertex-gemini-4-carbon"]
+display_name = "Gemini 4 Carbon (Vertex AI)"
+api_model = "gemini-4-carbon"
+limits = { context_tokens = 1048576, max_output_tokens = 65536 }
+capabilities = { text = true, tools = true }
 EOF
+  # An existing block is left alone (it may hold the user's own settings), so say what it lacks.
+  # shortcut: whole-file literal match, so the same text in a comment or another provider hides
+  # the warning; parse the TOML if settings.toml gains a second localhost provider.
+  local want
+  for want in "base_url = \"http://localhost:$port/v1\"" \
+    '[llm.providers.litellm.models."vertex-gemini-3.8-flash"]' \
+    '[llm.providers.litellm.models."vertex-gemini-4-carbon"]'; do
+    grep -qF -- "$want" "$SETTINGS" \
+      || note "WARNING: $SETTINGS lacks $want; edit [llm.providers.litellm] to match docs/vertex-ai-litellm.md section 7"
+  done
+  if grep -q '^\[run\.model\]' "$SETTINGS" 2>/dev/null; then
+    note "$SETTINGS has a [run.model] table (from the former DeepSeek step). fabro run does not"
+    note "send it to the server; the workflows set [run.model] in workflow.toml. Remove it."
+  fi
+  if [[ -f "$proxy_env" ]] && grep -q '^LITELLM_MASTER_KEY=' "$proxy_env"; then
+    sed -n 's/^LITELLM_MASTER_KEY=//p' "$proxy_env" | tail -1 | tr -d '\n' \
+      | fabro secret set --no-upgrade-check --value-stdin --description "LiteLLM proxy master key (scripts/litellm-proxy.sh)" LITELLM_API_KEY
+    note "stored LITELLM_API_KEY from $proxy_env"
+  else
+    set_secret LITELLM_API_KEY "LiteLLM proxy master key (scripts/litellm-proxy.sh)"
+  fi
   fabro server restart --no-upgrade-check >/dev/null 2>&1 || true
-  fabro model test deepseek --no-upgrade-check || note "model test failed; check the key and server logs"
+  local model
+  for model in vertex-gemini-3.8-flash vertex-gemini-4-carbon; do
+    fabro model test --model "$model" --tools --no-upgrade-check \
+      || note "$model test failed; check scripts/litellm-proxy.sh status and the proxy logs"
+  done
 }
 
 step_brave() {
@@ -176,15 +221,15 @@ EOF
 step_doctor() {
   bold "fabro doctor"
   fabro doctor --no-upgrade-check -v || true
-  note "Expected: Fabro server reachable; DeepSeek provider ready; GitHub configured; Docker available."
+  note "Expected: Fabro server reachable; litellm provider ready; GitHub configured; Docker available."
   note "Secrets present:"; fabro secret list --no-upgrade-check || true
 }
 
 steps=("$@")
-[[ ${#steps[@]} -eq 0 ]] && steps=(fabro deepseek brave claude codex coderabbit environment doctor)
+[[ ${#steps[@]} -eq 0 ]] && steps=(fabro litellm brave claude codex coderabbit environment doctor)
 for s in "${steps[@]}"; do
   case "$s" in
-    fabro|deepseek|brave|claude|codex|coderabbit|environment|doctor) "step_$s" ;;
+    fabro|litellm|brave|claude|codex|coderabbit|environment|doctor) "step_$s" ;;
     -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
     *) echo "unknown step: $s" >&2; exit 64 ;;
   esac
