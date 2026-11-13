@@ -112,6 +112,8 @@ limits = { context_tokens = 1048576, max_output_tokens = 65536 }
 capabilities = { text = true, tools = true }
 EOF
   # An existing block is left alone (it may hold the user's own settings), so say what it lacks.
+  # shortcut: whole-file literal match, so the same text in a comment or another provider hides
+  # the warning; parse the TOML if settings.toml gains a second localhost provider.
   local want
   for want in "base_url = \"http://localhost:$port/v1\"" \
     '[llm.providers.litellm.models."vertex-gemini-3.8-flash"]' \
