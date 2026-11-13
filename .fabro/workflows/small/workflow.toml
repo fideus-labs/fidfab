@@ -11,6 +11,15 @@ _version = 1
 [workflow]
 graph = "workflow.fabro"
 
+# Default model for Fabro-native nodes: Gemini 3.8 Flash on Vertex AI, routed
+# through the local LiteLLM proxy. The model ID is declared by the server's
+# ~/.fabro/settings.toml (`scripts/setup.sh litellm`, README step 2). The
+# Claude Code and Codex stages (backend="acp") use their own subscriptions and
+# ignore this; the Gemini 4 Carbon review nodes pin their model on the node.
+[run.model]
+name = "vertex-gemini-3.8-flash"
+provider = "litellm"
+
 # The goal is the task text; supply it per run with --goal or --goal-file.
 # Everything below is a workflow-owned default; override inputs with -I key=value.
 [run.inputs]

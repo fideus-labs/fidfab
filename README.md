@@ -12,7 +12,9 @@ pixi and Rust toolchains, every step recorded in the Fabro run log).
 Everything runs on your workstation: a local Fabro server, local Docker containers, and
 leading models through your own Claude Code and Codex subscriptions over the
 [Agent Client Protocol](https://agentclientprotocol.com) (ACP). Fabro-native steps default to
-DeepSeek. The compute-heavy work (compilation, tests) uses the full local machine.
+Gemini 3.8 Flash on Google Cloud Vertex AI, reached through a local LiteLLM proxy, and Gemini 4
+Carbon adds independent code and security reviews. The compute-heavy work (compilation, tests)
+uses the full local machine.
 
 <p align="center">
   <img src="docs/graphs/medium.svg" alt="fidfab medium workflow graph" width="320">
@@ -32,7 +34,9 @@ DeepSeek. The compute-heavy work (compilation, tests) uses the full local machin
 ## How it fits together
 
 ```
- you ──(fabro run / web UI / VS Code)──▶ local Fabro server
+ you ──(fabro run / web UI / VS Code)──▶ local Fabro server ──▶ LiteLLM proxy (127.0.0.1:4000)
+                                           │                       └─▶ Vertex AI: Gemini 3.8 Flash,
+                                           │                           Gemini 4 Carbon
                                            │  injects vault secrets, mints a scoped GITHUB_TOKEN
                                            ▼
                                    docker: fidfab:latest  (Ubuntu 26.04)
@@ -50,8 +54,8 @@ DeepSeek. The compute-heavy work (compilation, tests) uses the full local machin
 2. Claude Code implements the approved plan in the sandbox.
 3. The verification pipeline runs over the diff: coverage of uncovered behaviour (opus),
    CodeRabbit review and autonomous fix (opus, with a 3-minute retry and a fallback to Claude's
-   built-in review), Codex (luna) review, Claude (fable) review, a security review, a
-   personal-data decision with an optional Cloudflare security audit, each followed by an
+   built-in review), Codex (luna) review, Gemini 4 Carbon review, Claude (fable) review, a
+   security review, a second Gemini 4 Carbon security review, a personal-data decision with an optional Cloudflare security audit, each followed by an
    opus "verify and address" pass that writes a Markdown record of the approach taken per finding.
 4. opus writes the commit, opens the PR with `gh pr create --fill`, then rewrites the title and
    body from the actual diff and task context.
@@ -61,8 +65,10 @@ DeepSeek. The compute-heavy work (compilation, tests) uses the full local machin
 
 The models, effort levels, and tools for each step are declared in the DOT graphs under
 `.fabro/workflows/` and the components under `components/`; the prompts are plain Markdown
-under `components/prompts/`. The review prompt used by both the Codex and Claude review stages
-is `components/prompts/partials/review-priorities.md`.
+under `components/prompts/`. The review prompt used by the Codex, Gemini 4 Carbon, and Claude
+review stages is `components/prompts/partials/review-priorities.md`. Native nodes without an
+explicit model use the `[run.model]` in each `workflow.toml` (`vertex-gemini-3.8-flash` on the
+`litellm` provider); the Carbon review nodes pin `vertex-gemini-4-carbon`.
 
 ## Workflows
 
@@ -87,8 +93,10 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 | `coverage.fabro` | opus checks the diff for uncovered behaviour and adds tests |
 | `coderabbit-review.fabro` | `coderabbit review --agent`; if unavailable, waits 3 minutes and retries, then falls back to Claude's built-in code review; opus fixes issues following section "4. Fix Issues (Autonomous Workflow)" of the [CodeRabbit code-review skill](https://github.com/coderabbitai/skills) |
 | `codex-review.fabro` | Codex (luna) review with the prioritised review prompt, then opus verifies and addresses, writing `docs/plans/<slug>/review-codex.md` |
+| `carbon-review.fabro` | Independent Gemini 4 Carbon review (Fabro-native, through LiteLLM) with the same review priorities, then opus verifies and addresses, writing `.fidfab/reviews/carbon-review-response.md` |
 | `claude-review.fabro` | Same review by Claude (fable), then opus verifies and addresses |
 | `security-review.fabro` | opus security review of the changes, then verify and address |
+| `carbon-security-review.fabro` | Independent second security review by Gemini 4 Carbon, then opus verifies and addresses, writing `.fidfab/reviews/carbon-security-review-response.md` |
 | `personal-data-audit.fabro` | Codex decides whether the changes touch potentially personal data; if so runs the [Cloudflare security-audit skill](https://github.com/cloudflare/security-audit-skill) and opus addresses the findings |
 | `commit-and-pr.fabro` | Descriptive commit, `gh pr create --fill`, then title and body rewritten from the diff |
 | `pr-steward.fabro` | Hourly loop: comments, conflicts, CI; exits when all clear |
@@ -103,7 +111,9 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
   (`gh auth login`; `fabro install` takes its GitHub token from `gh auth token`)
 - Subscriptions or keys: Claude Pro/Max (for Claude Code), ChatGPT Plus/Pro or an OpenAI API key
   (for Codex), a [CodeRabbit](https://www.coderabbit.ai) account with an agentic API key, a
-  [DeepSeek Platform](https://platform.deepseek.com/) key, a [Brave Search API](https://brave.com/search/api/) key
+  [Brave Search API](https://brave.com/search/api/) key
+- A Google Cloud project with billing and the Vertex AI API enabled, plus a service account key
+  for the local LiteLLM proxy ([docs/vertex-ai-litellm.md](docs/vertex-ai-litellm.md))
 - Node.js 22+ on the host if you want `claude` and `codex` installed locally for login flows
 
 ### Guided setup
@@ -112,7 +122,7 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 git clone https://github.com/fideus-labs/fidfab.git
 cd fidfab
 scripts/setup.sh            # all steps, interactive
-scripts/setup.sh deepseek   # or one step at a time
+scripts/setup.sh litellm    # or one step at a time
 ```
 
 The steps below are what the script does, if you prefer to run them yourself.
@@ -135,26 +145,32 @@ to `Configure LLM providers now?`. When `codex` is on PATH it otherwise asks
 `OpenAI (Codex) detected. Set up OpenAI with device code login?`, which stores a
 ChatGPT-subscription credential that Fabro routes through the Codex backend
 (`chatgpt.com/backend-api/codex`). fidfab does not use Fabro's OpenAI provider: native nodes run
-on DeepSeek (next step) and the Codex stages authenticate with `CODEX_AUTH_JSON_B64` (step 5).
+on Gemini through LiteLLM (next step) and the Codex stages authenticate with `CODEX_AUTH_JSON_B64`
+(step 5).
 
-### 2. DeepSeek as Fabro's default model
+### 2. Gemini on Vertex AI through LiteLLM
+
+Fabro's native nodes call Gemini on Vertex AI through a local
+[LiteLLM](https://docs.litellm.ai/) proxy, using Fabro's built-in
+[LiteLLM provider](https://docs.fabro.sh/integrations/litellm). Create the Google Cloud project,
+the least-privilege service account, and its key first
+([docs/vertex-ai-litellm.md](docs/vertex-ai-litellm.md)), then:
 
 ```bash
-fabro provider login --provider deepseek      # or: fabro secret set DEEPSEEK_API_KEY
+scripts/litellm-proxy.sh init PROJECT_ID   # ~/.config/fidfab-litellm/proxy.env with a new master key
+scripts/litellm-proxy.sh start             # pinned LiteLLM image on 127.0.0.1:4000
+scripts/litellm-proxy.sh test              # one request to each model
+scripts/setup.sh litellm                   # Fabro provider block, LITELLM_API_KEY, model tests
 ```
 
-Then set the default model in `~/.fabro/settings.toml`:
-
-```toml
-[run.model]
-name = "deepseek-v4-flash"
-provider = "deepseek"
-```
-
-Restart the server (`fabro server restart`) and check with `fabro model test deepseek`.
-DeepSeek V4 Flash is the provider default; `deepseek-v4-pro` is available for harder steps
-([Fabro DeepSeek integration](https://docs.fabro.sh/integrations/deepseek)). Only Fabro-native
-nodes use this model; the Claude Code and Codex stages use your subscriptions.
+The step adds `[llm.providers.litellm]` with the models `vertex-gemini-3.8-flash` and
+`vertex-gemini-4-carbon` to `~/.fabro/settings.toml`, stores the proxy master key as the
+`LITELLM_API_KEY` vault secret, restarts the server, and runs
+`fabro model test --model <id> --tools` for both. The workflows choose Gemini 3.8 Flash in their
+`workflow.toml` `[run.model]`, and the Carbon review components set
+`provider="litellm", model="vertex-gemini-4-carbon"` on their review nodes
+([Fabro stylesheets and node attributes](https://docs.fabro.sh/workflows/stylesheets)). Only
+Fabro-native nodes use these models; the Claude Code and Codex stages use your subscriptions.
 
 ### 3. Brave Search
 
@@ -274,7 +290,7 @@ first stage fails with `fidfab-bootstrap: command not found`.
 fabro doctor
 ```
 
-Expect green for the local server, LLM provider (DeepSeek), GitHub token, Docker sandbox, and
+Expect green for the local server, LLM provider (litellm), GitHub token, Docker sandbox, and
 Web Search (`brave: configured and reachable`).
 
 ## Running workflows
@@ -445,12 +461,15 @@ docker/
   build.sh               local build with optional baked-in target repository
   config/                Claude Code and Codex settings baked into the image
   rootfs/usr/local/bin/  fidfab-* helpers used by the workflows
+  litellm/config.yaml    LiteLLM proxy model list (Gemini on Vertex AI)
 scripts/
-  setup.sh               host setup (Fabro, DeepSeek, Brave, agents, environment, doctor)
+  setup.sh               host setup (Fabro, LiteLLM provider, Brave, agents, environment, doctor)
+  litellm-proxy.sh       init/start/stop/status/test the local LiteLLM proxy for Vertex AI
   sync-components.sh     vendor components/ into workflow directories
   render-graphs.sh       docs/graphs/*.svg
 tests/                   image tests, ACP smoke client, workflow validation
 docs/graphs/             rendered workflow graphs
+docs/vertex-ai-litellm.md  Google Cloud project, service account, monitoring, and proxy setup
 .devcontainer/           VS Code dev container on the sandbox image
 ```
 
@@ -468,9 +487,16 @@ docs/graphs/             rendered workflow graphs
 - `fabro run` ignores `[run.environment] id` in `workflow.toml` and uses the server's `default`
   environment unless `--environment fidfab` is passed (Fabro 0.396); an unknown id is not an
   error either. `fabro inspect <run>` shows the resolved image under `run.environment.image`.
-- If the install wizard set up OpenAI via Codex device login, run `scripts/setup.sh deepseek`
-  so `[run.model]` points at DeepSeek; the ChatGPT-subscription OpenAI credential then stays unused.
-  The wizard writes no `[run.model]`; if you added one by hand, the step leaves it alone, so edit it.
+- `fabro run` does not send `[run]` settings from `~/.fabro/settings.toml` to the server (Fabro
+  0.415 warns about it), so the default model lives in each `workflow.toml` `[run.model]`. Remove
+  any `[run.model]` left in `settings.toml` by the former DeepSeek setup step.
+- If the install wizard set up OpenAI via Codex device login, that ChatGPT-subscription OpenAI
+  credential stays unused; the workflows select the `litellm` provider explicitly.
+- The Gemini 4 Carbon review nodes are Fabro-native agents: Fabro runs their tool loop on the
+  host server and their tools in the sandbox with full permissions, like the other native nodes.
+  Their prompts tell them to write only the review file.
+- Vertex AI Standard pay-as-you-go capacity is shared; bursts can return `429`. LiteLLM retries,
+  and Fabro retries the stage; a budget alert in Google Cloud Billing notifies but does not cap spend.
 - Subscription credentials (Claude Code OAuth token, Codex `auth.json`) expire and rotate;
   `scripts/setup.sh claude` / `scripts/setup.sh codex` refresh them.
 
