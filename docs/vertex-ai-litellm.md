@@ -35,6 +35,13 @@ Both models are served from the `global` location
 Without an explicit quota project, `gcloud`-authenticated test calls can land on a shared quota
 and return `429`.
 
+Billing and the Vertex AI API are not enough for Gemini 4 Carbon: Google makes it available
+only to verified enterprise customers in select regions (see the model page above). The page
+gives no self-service request path, so ask your Google Cloud account team if you are unsure.
+`scripts/litellm-proxy.sh test` (section 6) is the check: `gemini-4-carbon: failed` with a
+working `gemini-3.8-flash` means the project lacks access, and the Carbon review stages will
+fail until it has it.
+
 ## 2. A role that can only run inference
 
 The predefined `roles/aiplatform.user` grants far more than calling a model (datasets,
@@ -99,16 +106,29 @@ gcloud org-policies set-policy allow-keys.yaml
 gcloud org-policies set-policy key-expiry.yaml
 ```
 
-The expiry applies only to keys created after the policy; check `validBeforeTime` with
-`gcloud iam service-accounts keys list --iam-account=...` and recreate any key that shows
-`9999-12-31T23:59:59Z`. Then create the key directly into the proxy's config directory:
+Organization policy changes can take up to 15 minutes to be enforced
+([creating organization policies](https://docs.cloud.google.com/organization-policy/create-organization-policies)),
+and a key created before then gets no expiry. Wait, and confirm the effective policy lists
+`2160h` before creating the key:
+
+```bash
+gcloud org-policies describe iam.serviceAccountKeyExpiryHours --project=PROJECT_ID --effective
+```
+
+Then create the key directly into the proxy's config directory:
 
 ```bash
 install -d -m 700 ~/.config/fidfab-litellm
 gcloud iam service-accounts keys create ~/.config/fidfab-litellm/litellm-proxy.json \
   --iam-account=litellm-proxy-NAME@PROJECT_ID.iam.gserviceaccount.com
 chmod 600 ~/.config/fidfab-litellm/litellm-proxy.json
+gcloud iam service-accounts keys list \
+  --iam-account=litellm-proxy-NAME@PROJECT_ID.iam.gserviceaccount.com
 ```
+
+Before using the key, check that its `validBeforeTime` (`EXPIRES_AT`) is about 90 days out. The
+expiry applies only to keys created under the policy: delete and recreate any key that shows
+`9999-12-31T23:59:59Z`.
 
 Put a rotation reminder about a week before the expiry: create the new key, restart the proxy
 (`scripts/litellm-proxy.sh start`), run `scripts/litellm-proxy.sh test`, then delete the old

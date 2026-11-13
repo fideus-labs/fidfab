@@ -83,7 +83,7 @@ cmd_start() {
   note "started $name on http://127.0.0.1:$port/v1"
   local _
   for _ in $(seq 1 30); do
-    if curl -fsS "http://127.0.0.1:$port/health/liveliness" >/dev/null 2>&1; then
+    if curl -fsS --max-time 5 "http://127.0.0.1:$port/health/liveliness" >/dev/null 2>&1; then
       note "proxy is live"; return 0
     fi
     sleep 2
@@ -98,7 +98,7 @@ cmd_stop() {
 
 cmd_status() {
   docker ps -a --filter "name=^${name}$" --format '  {{.Names}}  {{.Status}}  {{.Image}}'
-  if curl -fsS "http://127.0.0.1:$port/health/liveliness" >/dev/null 2>&1; then
+  if curl -fsS --max-time 5 "http://127.0.0.1:$port/health/liveliness" >/dev/null 2>&1; then
     note "liveliness: ok (http://127.0.0.1:$port)"
   else
     note "liveliness: no answer on 127.0.0.1:$port"

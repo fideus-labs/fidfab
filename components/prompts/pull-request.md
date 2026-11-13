@@ -9,7 +9,7 @@
    - a concise, descriptive **title** that summarises the change;
    - a **description** with sections: *What changed*, *Why* (based on the task context:
      "{{ goal }}"), *Implementation notes* (important details, trade-offs, follow-ups),
-     *Verification* (tests added, review stages passed: coverage, CodeRabbit or built-in
+     *Verification* (tests added, review stages that ran: coverage, CodeRabbit or built-in
      review, Codex review, Gemini 4 Carbon review, Claude review, security review,
      Gemini 4 Carbon security review, and the personal-data decision with the audit
      result when it ran).

@@ -83,7 +83,7 @@ step_litellm() {
   local proxy_env="${FIDFAB_LITELLM_DIR:-$HOME/.config/fidfab-litellm}/proxy.env"
   local port="${FIDFAB_LITELLM_PORT:-4000}"
   note "Google Cloud project, service account and proxy: docs/vertex-ai-litellm.md"
-  if ! curl -fsS "http://127.0.0.1:$port/health/liveliness" >/dev/null 2>&1; then
+  if ! curl -fsS --max-time 5 "http://127.0.0.1:$port/health/liveliness" >/dev/null 2>&1; then
     note "No LiteLLM proxy answers on 127.0.0.1:$port. Start it first:"
     note "  scripts/litellm-proxy.sh init PROJECT_ID && scripts/litellm-proxy.sh start"
   fi
@@ -111,6 +111,14 @@ api_model = "gemini-4-carbon"
 limits = { context_tokens = 1048576, max_output_tokens = 65536 }
 capabilities = { text = true, tools = true }
 EOF
+  # An existing block is left alone (it may hold the user's own settings), so say what it lacks.
+  local want
+  for want in "base_url = \"http://localhost:$port/v1\"" \
+    '[llm.providers.litellm.models."vertex-gemini-3.8-flash"]' \
+    '[llm.providers.litellm.models."vertex-gemini-4-carbon"]'; do
+    grep -qF -- "$want" "$SETTINGS" \
+      || note "WARNING: $SETTINGS lacks $want; edit [llm.providers.litellm] to match docs/vertex-ai-litellm.md section 7"
+  done
   if grep -q '^\[run\.model\]' "$SETTINGS" 2>/dev/null; then
     note "$SETTINGS has a [run.model] table (from the former DeepSeek step). fabro run does not"
     note "send it to the server; the workflows set [run.model] in workflow.toml. Remove it."

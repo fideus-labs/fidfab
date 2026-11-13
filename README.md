@@ -125,6 +125,11 @@ scripts/setup.sh            # all steps, interactive
 scripts/setup.sh litellm    # or one step at a time
 ```
 
+The script does not create or start the LiteLLM proxy, which needs your Google Cloud project
+and service-account key. Run the `scripts/litellm-proxy.sh` commands from step 2 below before
+the guided setup (or rerun `scripts/setup.sh litellm` afterwards); otherwise the `litellm` step
+only reports the proxy as missing and its model tests fail.
+
 The steps below are what the script does, if you prefer to run them yourself.
 
 ### 1. Install Fabro and upgrade to the latest pre-release
