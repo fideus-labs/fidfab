@@ -38,9 +38,11 @@ and return `429`.
 Billing and the Vertex AI API are not enough for Gemini 4 Carbon: Google makes it available
 only to verified enterprise customers in select regions (see the model page above). The page
 gives no self-service request path, so ask your Google Cloud account team if you are unsure.
-`scripts/litellm-proxy.sh test` (section 6) is the check: `gemini-4-carbon: failed` with a
-working `gemini-3.8-flash` means the project lacks access, and the Carbon review stages will
-fail until it has it.
+`scripts/litellm-proxy.sh test` (section 6) is the check, but `gemini-4-carbon: failed` with a
+working `gemini-3.8-flash` only says the request failed. Read the `curl` error above it and
+`scripts/litellm-proxy.sh logs`: a `403` or `404` from Vertex AI naming the model means the
+project lacks access, and the Carbon review stages will fail until it has it; a `429` or a
+network error is something else.
 
 ## 2. A role that can only run inference
 
