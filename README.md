@@ -438,7 +438,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 |---|---|---|
 | `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow |
 | `scripts/sync-components.sh --check` | host, CI | vendored components match `components/` |
-| `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard (stubbed `fabro`/`gh`) |
+| `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again (stubbed `fabro`/`gh`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |
 | `tests/test-coderabbit.sh` | image | CLI installed; with `CODERABBIT_API_KEY`, `auth login` and `auth status --agent` succeed |
@@ -503,7 +503,9 @@ docs/vertex-ai-litellm.md  Google Cloud project, service account, monitoring, an
 - Vertex AI Standard pay-as-you-go capacity is shared; bursts can return `429`. LiteLLM retries,
   and Fabro retries the stage; a budget alert in Google Cloud Billing notifies but does not cap spend.
 - Subscription credentials (Claude Code OAuth token, Codex `auth.json`) expire and rotate;
-  `scripts/setup.sh claude` / `scripts/setup.sh codex` refresh them.
+  `scripts/setup.sh codex` copies the current `auth.json` again; for Claude Code, run
+  `fabro secret rm CLAUDE_CODE_OAUTH_TOKEN` first, then `scripts/setup.sh claude` (setup keeps
+  a secret that is already set).
 
 ## License
 
