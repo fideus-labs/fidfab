@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # setup.sh — configure a workstation to run fidfab workflows with a local Fabro server.
 #
-# Idempotent and interactive where a credential is needed. Steps (each can be
-# run on its own with `scripts/setup.sh <step>`):
+# Idempotent and interactive where a credential is needed; a secret that
+# `fabro secret list` already shows is not asked for again. Steps (each
+# can be run on its own with `scripts/setup.sh <step>`):
 #
 #   fabro        install Fabro, upgrade to the latest pre-release, run the install wizard
 #   litellm      Fabro's LiteLLM provider for Gemini on Vertex AI (default model)
@@ -24,14 +25,13 @@ SETTINGS="$HOME/.fabro/settings.toml"
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 note() { printf '  %s\n' "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
-secret_exists() { fabro secret list --no-upgrade-check 2>/dev/null | grep -qx "$1" || fabro secret list --no-upgrade-check 2>/dev/null | grep -q "^$1\b"; }
+keep_secret() { # name; true, with a note, when the vault already holds it
+  # --json, because the table layout is not a stable interface (its rows are indented).
+  grep -qE "\"name\": *\"$1\"" <<<"$(fabro secret list --no-upgrade-check --json 2>/dev/null)" || return 1
+  note "$1 is already set, keeping it. To replace it: fabro secret rm $1, then re-run this step."
+}
 set_secret() { # name description
-  local name="$1" desc="$2"
-  if secret_exists "$name"; then
-    read -r -p "  Secret $name already exists. Replace it? [y/N] " yn
-    [[ "$yn" =~ ^[Yy] ]] || return 0
-  fi
-  fabro secret set --no-upgrade-check --description "$desc" "$name"
+  keep_secret "$1" || fabro secret set --no-upgrade-check --description "$2" "$1"
 }
 ensure_toml_block() { # marker, heredoc on stdin
   local marker="$1" body
@@ -142,6 +142,7 @@ EOF
 
 step_brave() {
   bold "Brave Search"
+  keep_secret BRAVE_SEARCH_API_KEY && return 0
   note "Create a key at https://brave.com/search/api/ (the Data for AI plan covers agent use)"
   note "Fabro prefers Brave for its web_search tool whenever BRAVE_SEARCH_API_KEY is in the vault."
   set_secret BRAVE_SEARCH_API_KEY "Brave Search API key for Fabro web_search"
@@ -149,6 +150,7 @@ step_brave() {
 
 step_claude() {
   bold "Claude Code (ACP, subscription)"
+  keep_secret CLAUDE_CODE_OAUTH_TOKEN && return 0
   if have claude; then
     note "Generating a long-lived subscription token with: claude setup-token"
     note "(Log in with your Claude Pro/Max account in the browser when prompted.)"
@@ -170,6 +172,8 @@ step_claude() {
 step_codex() {
   bold "Codex (ACP, ChatGPT subscription or API key)"
   local codex_home="${CODEX_HOME:-$HOME/.codex}"
+  # An existing auth.json is still copied below: that refreshes the secret without asking anything.
+  if [[ ! -f "$codex_home/auth.json" ]] && keep_secret CODEX_AUTH_JSON_B64; then return 0; fi
   if have codex; then
     if [[ ! -f "$codex_home/auth.json" ]]; then
       note "Logging in with the device-code flow: codex login --device-auth"
@@ -192,6 +196,7 @@ step_codex() {
 
 step_coderabbit() {
   bold "CodeRabbit CLI"
+  keep_secret CODERABBIT_API_KEY && return 0
   note "Create an Agentic API key in the CodeRabbit dashboard (Settings → API keys)."
   set_secret CODERABBIT_API_KEY "CodeRabbit agentic API key for coderabbit review --agent"
 }

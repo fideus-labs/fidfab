@@ -2,7 +2,8 @@
 # test-setup.sh — host-side check that `scripts/setup.sh fabro` skips Fabro's LLM wizard
 # step (and with it the "OpenAI (Codex) detected" device-login prompt) whenever gh is
 # logged in, and falls back to the interactive wizard otherwise, and that the environment
-# step writes its settings.toml block exactly once. Stubs fabro and gh.
+# step writes its settings.toml block exactly once, and that a secret already in the vault
+# is not requested again. Stubs fabro, gh, claude and codex.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -10,7 +11,9 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/bin" "$tmp/home"
 cat > "$tmp/bin/fabro" <<'STUB'
 #!/usr/bin/env bash
-[[ "$1" == install ]] && printf '%s\n' "$*" >> "$FIDFAB_TEST_LOG"
+[[ "$1" == install || "$1 ${2:-}" == "secret set" ]] && printf '%s\n' "$*" >> "$FIDFAB_TEST_LOG"
+[[ "$*" == *--value-stdin* ]] && cat >/dev/null # else the writer can die of SIGPIPE under pipefail
+[[ "$1 ${2:-}" == "secret list" ]] && for n in ${FABRO_STUB_SECRETS:-}; do printf '    "name": "%s",\n' "$n"; done
 [[ "$*" == *--non-interactive* && -n "${FABRO_STUB_FAIL_SCRIPTED:-}" ]] && exit 2
 [[ "$1" == --version ]] && echo "fabro 0.0.0-stub"
 exit 0
@@ -20,6 +23,9 @@ cat > "$tmp/bin/gh" <<'STUB'
 [[ -n "${GH_STUB_LOGIN:-}" ]] && { echo "$GH_STUB_LOGIN"; exit 0; }
 exit 1
 STUB
+for cli in claude codex; do
+  printf '#!/usr/bin/env bash\necho "%s $*" >> "$FIDFAB_TEST_LOG"\n' "$cli" > "$tmp/bin/$cli"
+done
 chmod +x "$tmp/bin/"*
 export PATH="$tmp/bin:$PATH" HOME="$tmp/home" FIDFAB_TEST_LOG="$tmp/calls"
 
@@ -50,5 +56,23 @@ check "settings.toml present -> no install" ""
 scripts/setup.sh environment >/dev/null; scripts/setup.sh environment >/dev/null
 n="$(grep -cF '[environments.fidfab]' "$tmp/home/.fabro/settings.toml")"
 if [[ "$n" == 1 ]]; then echo "ok   environment step appends its block once"; else echo "FAIL environment step: $n blocks"; fail=1; fi
+
+FABRO_STUB_SECRETS="BRAVE_SEARCH_API_KEY CLAUDE_CODE_OAUTH_TOKEN" scripts/setup.sh brave claude >/dev/null
+check "secrets already in the vault -> not requested again" ""
+
+FABRO_STUB_SECRETS="BRAVE_SEARCH_API_KEY_OLD" scripts/setup.sh brave >/dev/null
+check "secret missing -> requested" \
+  "secret set --no-upgrade-check --description Brave Search API key for Fabro web_search BRAVE_SEARCH_API_KEY"
+
+# Codex: no login on this host and the secret is set -> nothing asked; with an auth.json the
+# secret is refreshed from it, which asks nothing either.
+export CODEX_HOME="$tmp/codex"; mkdir -p "$CODEX_HOME"
+FABRO_STUB_SECRETS=CODEX_AUTH_JSON_B64 scripts/setup.sh codex >/dev/null
+check "codex secret set, no auth.json -> no login, no prompt" ""
+
+echo '{}' > "$CODEX_HOME/auth.json"
+FABRO_STUB_SECRETS=CODEX_AUTH_JSON_B64 scripts/setup.sh codex >/dev/null
+check "codex secret set, auth.json present -> refreshed from it" \
+  "secret set --no-upgrade-check --value-stdin --description base64 of ~/.codex/auth.json (ChatGPT login or API key) CODEX_AUTH_JSON_B64"
 
 exit "$fail"
