@@ -11,6 +11,9 @@
 # NODE_MAJOR, RUST_TOOLCHAIN, CLAUDE_CODE_VERSION, CODEX_VERSION,
 # CLAUDE_AGENT_ACP_VERSION, CODEX_ACP_VERSION, DOCKER_BUILD_EXTRA_ARGS.
 #
+# Unless CLAUDE_CODE_VERSION / CODEX_VERSION is set, the image gets a claude / codex at
+# least as new as this host's: see the floor step below.
+#
 # Nothing secret is baked into the image: credentials are injected by Fabro at
 # run time from its vault.
 set -euo pipefail
@@ -37,6 +40,20 @@ case "$repo_url" in
     args+=(--ssh default)
     ;;
 esac
+# The agent versions default to "latest", which a cached layer freezes at whatever was
+# latest when it was built. Passing this host's claude / codex version as a floor reruns
+# that layer whenever the host has moved on; npm then installs "latest", or the newest
+# release above the floor if "latest" is behind it.
+# shortcut: a host version with no release at or above it on npm (a pre-release, a local build) fails the install; set the *_VERSION variable by hand then.
+for pin in claude:CLAUDE_CODE_VERSION codex:CODEX_VERSION; do
+  cli="${pin%%:*}"; var="${pin#*:}"
+  [[ -z "${!var:-}" ]] || continue
+  host_version="$("$cli" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[^ ]*' | head -n1 || true)"
+  if [[ -n "$host_version" ]]; then
+    echo "$cli: this host has $host_version, so the image gets at least that"
+    printf -v "$var" '>=%s' "$host_version"
+  fi
+done
 for var in UBUNTU_VERSION NODE_MAJOR RUST_TOOLCHAIN CLAUDE_CODE_VERSION CODEX_VERSION CLAUDE_AGENT_ACP_VERSION CODEX_ACP_VERSION; do
   if [[ -n "${!var:-}" ]]; then args+=(--build-arg "$var=${!var}"); fi
 done

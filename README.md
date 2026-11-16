@@ -208,6 +208,12 @@ wired into Codex as an MCP server, and the planning-with-files, CodeRabbit code-
 Cloudflare security-audit skills for both agents. The `gh` and `docker` CLIs are present for the
 PR stages. Pin versions with `CLAUDE_CODE_VERSION`, `CODEX_VERSION`, `RUST_TOOLCHAIN`, etc.
 
+Claude Code and Codex default to `latest`, which Docker's layer cache freezes at whatever was
+latest when the layer was built. So `build.sh` passes the version of `claude` and `codex` on
+your machine as a floor (`>=2.1.325`): the layer is rebuilt whenever your version changes, and
+the image gets `latest`, never anything older than what you run locally. Setting
+`CLAUDE_CODE_VERSION` or `CODEX_VERSION` yourself turns this off for that agent.
+
 With a repository URL, the build clones it to `/opt/fidfab/repo`, pre-builds its pixi and
 Cargo dependencies (a Rust repository is built through sccache, so its cache is warm), and
 `fidfab-bootstrap` reuses those caches in every run. Nothing secret is baked into the image.
@@ -439,6 +445,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 | `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow |
 | `scripts/sync-components.sh --check` | host, CI | vendored components match `components/` |
 | `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again (stubbed `fabro`/`gh`/`claude`/`codex`) |
+| `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |
 | `tests/test-coderabbit.sh` | image | CLI installed; with `CODERABBIT_API_KEY`, `auth login` and `auth status --agent` succeed |

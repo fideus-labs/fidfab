@@ -21,6 +21,7 @@ a Docker sandbox image and tests. Keep the following in mind.
 - `tests/validate-workflows.sh` must pass after any change to a `.fabro` or `workflow.toml`.
 - `scripts/sync-components.sh --check` must pass.
 - `tests/test-bootstrap.sh` must pass after any change to `fidfab-bootstrap`.
+- `tests/test-build.sh` must pass after any change to `docker/build.sh`.
 - `shellcheck -S warning` on all shell scripts; `node --check tests/acp-smoke.mjs`.
 - If `docker` is available, `docker/build.sh && tests/test-image.sh` is the full check.
 

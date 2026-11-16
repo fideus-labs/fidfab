@@ -131,9 +131,11 @@ ARG CLAUDE_CODE_VERSION=latest
 ARG CODEX_VERSION=latest
 ARG CLAUDE_AGENT_ACP_VERSION=latest
 ARG CODEX_ACP_VERSION=latest
+# The first two are quoted because build.sh passes a range (">=<host version>"):
+# unquoted, the shell takes ">" as a redirection and npm quietly installs latest.
 RUN npm install -g --allow-scripts=@anthropic-ai/claude-code \
-        @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
-        @openai/codex@${CODEX_VERSION} \
+        "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+        "@openai/codex@${CODEX_VERSION}" \
         @agentclientprotocol/claude-agent-acp@${CLAUDE_AGENT_ACP_VERSION} \
         @agentclientprotocol/codex-acp@${CODEX_ACP_VERSION} \
     && npm cache clean --force

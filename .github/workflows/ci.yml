@@ -34,6 +34,8 @@ jobs:
         run: tests/test-setup.sh
       - name: fidfab-bootstrap derives the plan slug from the topic branch
         run: tests/test-bootstrap.sh
+      - name: build.sh keeps the image's claude and codex at least as new as the host's
+        run: tests/test-build.sh
       - name: shellcheck
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q shellcheck >/dev/null
