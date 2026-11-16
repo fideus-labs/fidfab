@@ -26,7 +26,8 @@ case "$*" in
     [[ "$n" == "${GH_FAIL_REPLY:-0}" ]] && exit 1
     echo "reply $t" >> "$FIX/calls"; printf '%s\n' "$b" >> "$FIX/bodies"; echo "https://example.test/comment/$n" ;;
   *viewer*) [[ -z "${GH_NO_VIEWER:-}" ]] || exit 1; echo 'fabro-bot[bot]' ;;
-  *reviewThreads*) [[ -z "${GH_FAIL_THREADS:-}" ]] || exit 1; cat "${THREADS:-$FIX/threads.json}" ;;
+  *reviewThreads*) [[ -z "${GH_FAIL_THREADS:-}" ]] || exit 1; cat "${THREADS:-$FIX/threads.json}"
+    if [[ -n "${PAGE2:-}" && " $* " == *" --paginate "* ]]; then cat "$PAGE2"; fi ;;
   *) echo "gh stub: unexpected call: $*" >&2; exit 2 ;;
 esac
 STUB
@@ -59,6 +60,10 @@ jq '.data.repository.pullRequest.reviewThreads.nodes |= map(select(.isResolved))
   "$FIX/threads.json" > "$FIX/resolved.json"
 jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes[1].body = "Renamed."' \
   "$FIX/answered.json" > "$FIX/unmarked.json"
+jq '.data.repository.pullRequest.reviewThreads.nodes |= map(select(.id == "PRRT_1") | .id = "PRRT_5")' \
+  "$FIX/threads.json" > "$FIX/page2.json"
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes |= [.[0], "bogus", .[1]]' \
+  "$FIX/threads.json" > "$FIX/broken.json"
 jq '.mergeable = "CONFLICTING"' "$FIX/pr.json" > "$FIX/conflict.json"
 
 git init -q --bare "$tmp/origin.git"
@@ -101,6 +106,10 @@ check "our login without the marker awaits a reply" test "$(THREADS="$FIX/unmark
 check "unknown viewer: every thread awaits a reply" test "$(GH_NO_VIEWER=1 fidfab-pr-status | tail -n1 | jq .context_updates.awaiting_threads)" = 3
 check "gated conflicts still go to the steward"     test "$(PR="$FIX/conflict.json" THREADS="$FIX/answered.json" fidfab-pr-status | label)" = work
 check "nothing unresolved and green: done"          test "$(THREADS="$FIX/resolved.json" fidfab-pr-status | label)" = "done"
+check "threads on later pages are listed"           grep -qF 'id PRRT_5' <(THREADS="$FIX/resolved.json" PAGE2="$FIX/page2.json" fidfab-pr-status)
+check "... and routed"                              test "$(THREADS="$FIX/resolved.json" PAGE2="$FIX/page2.json" fidfab-pr-status | label)" = review
+check "a listing that fails to render fails"        not quiet env THREADS="$FIX/broken.json" fidfab-pr-status
+check "... and leaves no partial listing"           test ! -e .fidfab/reviews/pr-status.md
 check "no pull request: no-pr"                      test "$(GH_NO_PR=1 fidfab-pr-status | label)" = no-pr
 check "a failed thread query fails the stage"       not quiet env GH_FAIL_THREADS=1 fidfab-pr-status
 check "... and leaves no listing behind"            test ! -e .fidfab/reviews/pr-status.md
@@ -117,6 +126,9 @@ check "posting it is refused"                       not quiet fidfab-pr-reply
 check "... before anything is posted"               test ! -s "$FIX/calls"
 check "... or pushed"                               test "$(git -C "$tmp/origin.git" rev-parse feature)" != "$(git rev-parse HEAD)"
 
+jq -n '[{thread: "PRRT_1", body: ("y" * 20001)}]' > "$r"
+check "a reply longer than the preview is flagged"  grep -qF 'longer than 20000 characters' <(fidfab-pr-reply --preview)
+check "... and refused"                             not quiet fidfab-pr-reply
 echo '[{"thread": "PRRT_1",' > "$r"
 check "invalid JSON is flagged in the preview"      grep -qF 'the replies file is not valid JSON' <(fidfab-pr-reply --preview)
 check "... and refused"                             not quiet fidfab-pr-reply

@@ -43,14 +43,15 @@ repo="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 owner="${repo%%/*}"; name="${repo##*/}"
 # A failure here fails the stage (retried, then the steward's failure edge) rather than
 # reporting zero threads and declaring the PR done.
-# shortcut: first 100 threads and the latest 50 comments per thread; paginate if a PR outgrows that.
-threads_json="$(gh api graphql -f query='
-  query($owner:String!,$name:String!,$number:Int!){
+# shortcut: the latest 50 comments per thread; paginate them too if a thread outgrows that.
+threads_json="$(gh api graphql --paginate -f query='
+  query($owner:String!,$name:String!,$number:Int!,$endCursor:String){
     repository(owner:$owner,name:$name){
       pullRequest(number:$number){
-        reviewThreads(first:100){ nodes { id isResolved isOutdated path line
-          comments(last:50){ nodes { author { login __typename } authorAssociation createdAt
-                                      isMinimized minimizedReason body } } } }
+        reviewThreads(first:100, after:$endCursor){ pageInfo { hasNextPage endCursor }
+          nodes { id isResolved isOutdated path line
+            comments(last:50){ nodes { author { login __typename } authorAssociation createdAt
+                                       isMinimized minimizedReason body } } } }
       }
     }
   }' -F owner="$owner" -F name="$name" -F number="$number")"
@@ -59,8 +60,9 @@ viewer="$(gh api graphql -f query='{viewer{login}}' --jq .data.viewer.login 2>/d
 
 # A thread awaits a reply unless its last comment is ours: by the viewer and carrying the
 # marker fidfab-pr-reply adds (with a personal token the operator's own comments are the viewer's).
-threads="$(jq --arg viewer "${viewer%\[bot\]}" '
-  [.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)
+# --paginate prints one JSON object per page.
+threads="$(jq -s --arg viewer "${viewer%\[bot\]}" '
+  [.[].data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)
    | .comments = .comments.nodes
    | .awaiting = ((.comments[-1] // {}) as $c | $viewer == ""
        or (($c.author.login // "") | sub("\\[bot\\]$"; "")) != $viewer
@@ -83,7 +85,9 @@ elif [[ "$awaiting" != 0 || "$mergeable" != MERGEABLE || "$checks_failed" != 0 ]
   label=work
 fi
 
-{
+# Built in full before it is written: a render that fails part way must not leave unscreened
+# text in the file the steward reads on the failure route.
+listing="$({
   echo "PR #$number $url"
   echo "  mergeable:            $mergeable"
   echo "  unresolved threads:   $unresolved ($awaiting awaiting a reply)"
@@ -113,7 +117,8 @@ fi
             else .body | quote(4000) end), "")
     ' <<<"$threads"
   fi
-} > "$out/pr-status.md"
+})"
+printf '%s\n' "$listing" > "$out/pr-status.md"
 cat "$out/pr-status.md"
 
 jq -nc --arg l "$label" --argjson n "$number" --arg u "$url" --arg m "$mergeable" \

@@ -24,7 +24,7 @@ digraph PRSteward {
            backend="acp", acp.command="fidfab-claude-acp --model opus",
            prompt="@prompts/pr-steward.md", fidelity="truncate", max_visits=200]
   screen  [shape=hexagon, max_visits=200,
-           label="Unresolved review threads and their authors are listed above. No agent has read them. Let the steward address them, or resolve or hide comments on GitHub first and re-check."]
+           label="Unresolved review threads and their authors are listed above. No agent has read them. Let the steward address them, or resolve or hide comments on GitHub first and re-check. Typed text also re-checks; it is not passed to the steward."]
   draft   [label="Draft replies (Claude opus)", class="claude opus git",
            backend="acp", acp.command="fidfab-claude-acp --model opus",
            prompt="@prompts/pr-steward-draft.md", fidelity="truncate", max_visits=200]
@@ -49,6 +49,7 @@ digraph PRSteward {
   status  -> steward [condition="outcome=failed"]
   screen  -> draft   [label="[A] Address these threads"]
   screen  -> status  [label="[R] Re-check"]
+  screen  -> status  [freeform=true]  // typed text must not start an agent on the listing
   draft   -> preview -> approve
   preview -> done     [condition="outcome=failed"]  // incomplete preview: stop, never approve or push it
   approve -> publish  [label="[P] Post replies and push"]

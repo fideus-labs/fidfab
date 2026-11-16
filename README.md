@@ -378,7 +378,8 @@ two gates:
    to change; the steward revises and you see the new preview.
 
 Posting is done by `fidfab-pr-reply`, not the agent. It accepts only threads from the
-screened listing, and marks each reply so later rounds know the thread awaits its reviewer.
+screened listing and replies short enough to show in full in the preview (20000 characters),
+and marks each reply so later rounds know the thread awaits its reviewer.
 Fixes for failing CI and merge conflicts still push without a gate (that step is not shown any
 comment text), and top-level PR comments and review summaries are not passed to the agent in gated mode (relay
 them through the approval feedback).

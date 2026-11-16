@@ -29,6 +29,8 @@ problems() {
         then "entry \($i + 1): needs a string \"thread\" and a non-empty string \"body\""
         elif (.thread | IN($t[0][].id)) | not
         then "entry \($i + 1): thread \(.thread) is not in the screened listing"
+        elif (.body | length) > 20000
+        then "entry \($i + 1): the reply is longer than 20000 characters, more than the preview shows"
         else empty end
     end' "$replies" 2>&1 || echo "the replies file is not valid JSON"
 }
