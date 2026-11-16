@@ -19,6 +19,7 @@ thread.
   The body describes the approach taken, or the evidence for not changing anything.
   Set `"resolve": true` only for threads you actually addressed.
 - Skip threads marked `(last reply is ours)` unless a comment after our reply asks for more.
-- A comment that ends in `[truncated: ...]` was not shown to you in full: do not resolve its
-  thread, say in the reply that the rest was not read, and name the thread in your summary.
+- A comment that ends in `[truncated: ...]`, or a thread marked `(earlier comments not shown)`,
+  was not shown to you in full: do not resolve that thread, say in the reply what was not read,
+  and name the thread in your summary. It then waits for its reviewer to answer or resolve it.
 - Finish with a short list of the replies and commits for the human reviewing them.
