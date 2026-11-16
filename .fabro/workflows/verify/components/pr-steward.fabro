@@ -1,26 +1,61 @@
 // Component: pr-steward
-// Loop: read the PR status; if anything needs attention, Claude (opus)
-// addresses review comments (replying and resolving threads), rebases on
-// conflicts, and fixes failing CI. Wait an hour between iterations. Exit when
-// there are no unresolved comments, no conflicts and all checks are green.
+// Loop: read the PR status; if anything needs attention, Claude (opus) addresses
+// review comments, rebases on conflicts, and fixes failing CI. Wait an hour
+// between iterations. Exit when there are no unresolved comments, no conflicts
+// and all checks are green.
+//
+// Review comments are untrusted input (anyone can comment on a public PR), so by
+// default a human sees each unresolved thread with its author, quoted inert,
+// before any agent reads it (screen), and approves or rewrites the replies and
+// commits before anything is posted or pushed (approve). The importing workflow
+// must define the steward_gate input; "false" restores the unattended loop for
+// private repositories where every commenter is trusted.
+//
+// draft, revise and steward run with fidelity="truncate" and read
+// .fidfab/reviews/pr-status.md, which only the latest status visit writes, so a
+// listing the human rejected never reaches an agent through the preamble.
 digraph PRSteward {
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]
 
-  status  [label="PR status", script="fidfab-pr-status", output_schema="routing",
-           retry_policy="linear", max_visits=200]
+  status  [label="PR status", script="FIDFAB_STEWARD_GATE={{ inputs.steward_gate }} fidfab-pr-status",
+           output_schema="routing", retry_policy="linear", max_visits=200]
   steward [label="Steward PR (Claude opus)", class="claude opus git",
            backend="acp", acp.command="fidfab-claude-acp --model opus",
-           prompt="@prompts/pr-steward.md", max_visits=200]
+           prompt="@prompts/pr-steward.md", fidelity="truncate", max_visits=200]
+  screen  [shape=hexagon, max_visits=200,
+           label="Unresolved review threads and their authors are listed above. No agent has read them. Let the steward address them, or resolve or hide comments on GitHub first and re-check."]
+  draft   [label="Draft replies (Claude opus)", class="claude opus git",
+           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           prompt="@prompts/pr-steward-draft.md", fidelity="truncate", max_visits=200]
+  preview [label="Preview replies", script="fidfab-pr-reply --preview", max_visits=200]
+  approve [shape=hexagon, max_visits=200,
+           label="The steward's replies and unpushed commits are above; none of them is posted or pushed yet. Post them, or type what to change."]
+  feedback [label="Record feedback", script="cat > .fidfab/reviews/steward-feedback.md",
+            stdin_source="human.gate.text", max_visits=200]
+  revise  [label="Revise replies (Claude opus)", class="claude opus git",
+           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           prompt="@prompts/pr-steward-revise.md", fidelity="truncate", max_visits=200]
+  publish [label="Push and post replies", script="fidfab-pr-reply", retry_policy="linear", max_visits=200]
   wait    [label="Wait 1 hour", shape=insulator, duration="60m", max_visits=200]
   done    [shape=diamond, label="PR green & quiet"]
 
   start   -> status
   status  -> steward [label="work"]
+  status  -> screen  [label="review"]
   status  -> wait    [label="pending"]
   status  -> done    [label="done"]
   status  -> done    [label="no-pr"]
   status  -> steward [condition="outcome=failed"]
+  screen  -> draft   [label="[A] Address these threads"]
+  screen  -> status  [label="[R] Re-check"]
+  draft   -> preview -> approve
+  preview -> done     [condition="outcome=failed"]  // incomplete preview: stop, never approve or push it
+  approve -> publish  [label="[P] Post replies and push"]
+  approve -> feedback [freeform=true]
+  feedback -> revise -> preview
+  publish -> wait
+  publish -> preview  [condition="outcome=failed"]  // refused or failed: show the human again
   steward -> wait
   wait    -> status
   done    -> exit

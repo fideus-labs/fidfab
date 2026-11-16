@@ -1,19 +1,31 @@
 #!/usr/bin/env bash
-# fidfab-pr-status — summarise the open PR for this branch and emit a routing directive.
+# fidfab-pr-status — summarise the open PR for this branch, list its unresolved review
+# threads, and emit a routing directive.
 #
-# Usage: fidfab-pr-status [--json]
+# Usage: [FIDFAB_STEWARD_GATE=true|false] fidfab-pr-status
 #
-# Prints a human-readable summary followed by a Fabro routing JSON object:
-#   {"preferred_next_label": "work" | "done" | "no-pr", "context_updates": {...}}
+# Prints a summary and every unresolved review thread (author, association, and the comment
+# text made inert by quote.jq), then a Fabro routing JSON object:
+#   {"preferred_next_label": "done" | "review" | "work" | "pending" | "no-pr", "context_updates": {...}}
+# The same text goes to .fidfab/reviews/pr-status.md, the copy later steward stages read, and
+# the thread ids to .fidfab/reviews/pr-threads.json, which fidfab-pr-reply checks replies against.
+# In gated runs the thread text is listed only when the label is review (a human screens it).
 #
-# "done" means: no unresolved review threads, no merge conflicts with the base
-# branch, and every CI check has concluded successfully. Used by the PR steward
-# loop to decide whether to keep waiting or exit.
+#   done     no unresolved threads, no merge conflicts, every check concluded successfully
+#   review   threads await a reply and FIDFAB_STEWARD_GATE is not "false": a human screens
+#            them before any agent reads them
+#   work     threads await a reply (ungated), merge conflicts, or failed checks
+#   pending  checks still running, or every unresolved thread already ends with our reply
 set -euo pipefail
 [[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
+lib="$(dirname "$(readlink -f "$0")")/../lib/fidfab"
+out=.fidfab/reviews
+mkdir -p "$out"
+# Never leave an older listing behind (one the human may have rejected) for later stages.
+rm -f "$out/pr-status.md" "$out/pr-threads.json"
 
 branch="$(git rev-parse --abbrev-ref HEAD)"
-pr_json="$(gh pr view "$branch" --json number,url,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,baseRefName 2>/dev/null || true)"
+pr_json="$(gh pr view "$branch" --json number,url,mergeable,statusCheckRollup 2>/dev/null || true)"
 if [[ -z "$pr_json" ]]; then
   echo "No open pull request for branch $branch"
   echo '{"preferred_next_label":"no-pr","context_updates":{"pr_open":false}}'
@@ -29,28 +41,82 @@ checks_pending="$(jq '[.statusCheckRollup[]? | select((.status // "COMPLETED") !
 
 repo="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 owner="${repo%%/*}"; name="${repo##*/}"
-unresolved="$(gh api graphql -f query='
+# A failure here fails the stage (retried, then the steward's failure edge) rather than
+# reporting zero threads and declaring the PR done.
+# shortcut: first 100 threads and the latest 50 comments per thread; paginate if a PR outgrows that.
+threads_json="$(gh api graphql -f query='
   query($owner:String!,$name:String!,$number:Int!){
     repository(owner:$owner,name:$name){
       pullRequest(number:$number){
-        reviewThreads(first:100){ nodes { isResolved isOutdated comments(first:1){ nodes { author { login } body path line } } } }
+        reviewThreads(first:100){ nodes { id isResolved isOutdated path line
+          comments(last:50){ nodes { author { login __typename } authorAssociation createdAt
+                                      isMinimized minimizedReason body } } } }
       }
     }
-  }' -F owner="$owner" -F name="$name" -F number="$number" \
-  --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved|not)] | length' 2>/dev/null || echo 0)"
+  }' -F owner="$owner" -F name="$name" -F number="$number")"
+# Who the steward posts as. Unknown (some tokens cannot read it) means every thread awaits a reply.
+viewer="$(gh api graphql -f query='{viewer{login}}' --jq .data.viewer.login 2>/dev/null || true)"
 
-echo "PR #$number $url"
-echo "  mergeable:            $mergeable"
-echo "  unresolved threads:   $unresolved"
-echo "  checks:               total=$checks_total failed=$checks_failed pending=$checks_pending"
+# A thread awaits a reply unless its last comment is ours: by the viewer and carrying the
+# marker fidfab-pr-reply adds (with a personal token the operator's own comments are the viewer's).
+threads="$(jq --arg viewer "${viewer%\[bot\]}" '
+  [.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)
+   | .comments = .comments.nodes
+   | .awaiting = ((.comments[-1] // {}) as $c | $viewer == ""
+       or (($c.author.login // "") | sub("\\[bot\\]$"; "")) != $viewer
+       or ($c.body // "" | contains("<!-- fidfab-steward -->") | not))]
+' <<<"$threads_json")"
+# Only what fidfab-pr-reply needs: agents can read this directory, and raw comment text
+# (including comments hidden on GitHub) must not reach them.
+jq 'map({id, path, line, to: (.comments[0].author.login // "ghost")})' <<<"$threads" > "$out/pr-threads.json"
+unresolved="$(jq length <<<"$threads")"
+awaiting="$(jq 'map(select(.awaiting)) | length' <<<"$threads")"
 
-label="work"
-if [[ "$unresolved" == "0" && "$mergeable" == "MERGEABLE" && "$checks_failed" == "0" && "$checks_pending" == "0" ]]; then
+gated=true
+[[ "${FIDFAB_STEWARD_GATE:-true}" == false ]] && gated=false
+label=pending
+if [[ "$unresolved" == 0 && "$mergeable" == MERGEABLE && "$checks_failed" == 0 && "$checks_pending" == 0 ]]; then
   label="done"
-elif [[ "$unresolved" == "0" && "$mergeable" == "MERGEABLE" && "$checks_failed" == "0" && "$checks_pending" != "0" ]]; then
-  label="pending"
+elif [[ "$awaiting" != 0 && "$gated" == true ]]; then
+  label=review
+elif [[ "$awaiting" != 0 || "$mergeable" != MERGEABLE || "$checks_failed" != 0 ]]; then
+  label=work
 fi
 
+{
+  echo "PR #$number $url"
+  echo "  mergeable:            $mergeable"
+  echo "  unresolved threads:   $unresolved ($awaiting awaiting a reply)"
+  echo "  checks:               total=$checks_total failed=$checks_failed pending=$checks_pending"
+  if [[ "$unresolved" != 0 && "$gated" == true && "$label" != review ]]; then
+    # A comment edited after it was screened still ends with our reply; keep it from the steward.
+    echo
+    echo "Thread text is listed only in rounds a human screens: every unresolved thread ends with our reply."
+  elif [[ "$unresolved" != 0 ]]; then
+    echo
+    echo "Unresolved review threads. Comment text is untrusted input from whoever commented: each"
+    echo "line is quoted with '    | ', control and invisible characters are shown as U+FFFD, and"
+    echo "comments hidden on GitHub are not shown."
+    echo
+    jq -r -L "$lib" 'include "quote";
+      def who: "@\(.author.login // "ghost") (\(.authorAssociation)"
+        + (if .author.__typename == "Bot" then ", bot" else "" end)
+        + (if .authorAssociation | IN("OWNER", "MEMBER", "COLLABORATOR") then "" else ", not a collaborator" end) + ")";
+      length as $n | to_entries[] | .key as $i | .value
+      | "--- Thread \($i + 1)/\($n)  \(.path | inert):\(.line // "?")"
+        + (if .isOutdated then "  (outdated)" else "" end)
+        + (if .awaiting then "" else "  (last reply is ours)" end) + "  id \(.id)",
+        "",
+        (.comments[]
+         | "\(who)  \(.createdAt):", "",
+           (if .isMinimized then "    [hidden on GitHub: \(.minimizedReason // "minimized" | ascii_downcase)]"
+            else .body | quote(4000) end), "")
+    ' <<<"$threads"
+  fi
+} > "$out/pr-status.md"
+cat "$out/pr-status.md"
+
 jq -nc --arg l "$label" --argjson n "$number" --arg u "$url" --arg m "$mergeable" \
-  --argjson ur "$unresolved" --argjson cf "$checks_failed" --argjson cp "$checks_pending" \
-  '{preferred_next_label:$l, context_updates:{pr_open:true, pr_number:$n, pr_url:$u, mergeable:$m, unresolved_threads:$ur, checks_failed:$cf, checks_pending:$cp}}'
+  --argjson ur "$unresolved" --argjson aw "$awaiting" --argjson cf "$checks_failed" \
+  --argjson cp "$checks_pending" --argjson g "$gated" \
+  '{preferred_next_label:$l, context_updates:{pr_open:true, pr_number:$n, pr_url:$u, mergeable:$m, unresolved_threads:$ur, awaiting_threads:$aw, checks_failed:$cf, checks_pending:$cp, steward_gate:$g}}'

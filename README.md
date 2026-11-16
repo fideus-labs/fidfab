@@ -59,9 +59,10 @@ uses the full local machine.
    opus "verify and address" pass that writes a Markdown record of the approach taken per finding.
 4. opus writes the commit, opens the PR with `gh pr create --fill`, then rewrites the title and
    body from the actual diff and task context.
-5. A steward loop (opus) reads PR comments, addresses them, replies and resolves threads,
-   rebases on conflicts, fixes failing CI, then waits an hour and repeats until the PR is quiet
-   and green.
+5. A steward loop (opus) addresses review threads, rebases on conflicts, fixes failing CI, then
+   waits an hour and repeats until the PR is quiet and green. By default you screen each round
+   of review comments before an agent reads them and approve the replies before they are posted
+   ([Review comments are untrusted](#review-comments-are-untrusted)).
 
 The models, effort levels, and tools for each step are declared in the DOT graphs under
 `.fabro/workflows/` and the components under `components/`; the prompts are plain Markdown
@@ -74,10 +75,13 @@ explicit model use the `[run.model]` in each `workflow.toml` (`vertex-gemini-3.8
 
 | Workflow | Start | Human gates | Output |
 |---|---|---|---|
-| `small` | One-shot prompt | none before implementation | Branch, verified diff, PR, stewarded to green |
-| `medium` | `task_plan.md` / `findings.md` / `progress.md` via the [planning-with-files](https://github.com/OthmanAdi/planning-with-files) skill | plan approval loop | Plan files committed with the implementation, PR |
-| `large` | Research-backed roadmap drafted interactively with Claude fable, critiqued by Codex luna | draft approval, final approval | `docs/roadmap/**.md` work items with implementation plans and acceptance criteria, each sized for `medium`; PR |
-| `verify` | Existing branch | none | Verification pipeline only, PR and steward |
+| `small` | One-shot prompt | none before implementation; steward review screening and reply approval | Branch, verified diff, PR, stewarded to green |
+| `medium` | `task_plan.md` / `findings.md` / `progress.md` via the [planning-with-files](https://github.com/OthmanAdi/planning-with-files) skill | plan approval loop; steward review screening and reply approval | Plan files committed with the implementation, PR |
+| `large` | Research-backed roadmap drafted interactively with Claude fable, critiqued by Codex luna | draft approval, final approval; steward review screening and reply approval | `docs/roadmap/**.md` work items with implementation plans and acceptance criteria, each sized for `medium`; PR |
+| `verify` | Existing branch | steward review screening and reply approval | Verification pipeline only, PR and steward |
+
+The steward gates are on by default and only appear when a PR has review threads awaiting a
+reply; `-I steward_gate=false` turns them off for private repositories.
 
 Graphs: [small](docs/graphs/small.svg) · [medium](docs/graphs/medium.svg) ·
 [large](docs/graphs/large.svg) · [verify](docs/graphs/verify.svg). Re-render with
@@ -99,7 +103,7 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 | `carbon-security-review.fabro` | Independent second security review by Gemini 4 Carbon, then opus verifies and addresses, writing `.fidfab/reviews/carbon-security-review-response.md` |
 | `personal-data-audit.fabro` | Codex decides whether the changes touch potentially personal data; if so runs the [Cloudflare security-audit skill](https://github.com/cloudflare/security-audit-skill) and opus addresses the findings |
 | `commit-and-pr.fabro` | Descriptive commit, `gh pr create --fill`, then title and body rewritten from the diff |
-| `pr-steward.fabro` | Hourly loop: comments, conflicts, CI; exits when all clear |
+| `pr-steward.fabro` | Hourly loop: review threads (human-screened, replies approved before posting, unless `steward_gate=false`), conflicts, CI; exits when all clear |
 | `plan-with-files.fabro` | planning-with-files draft, human approve/revise loop |
 
 ## Setup
@@ -326,14 +330,15 @@ Against another repository, from anywhere:
 fabro run fideus-labs/fidfab:small --environment fidfab --goal-file task.md --target OWNER/REPO@feature-branch
 ```
 
-Human gates (plan and roadmap approvals) are answered in the terminal when `fabro run` is
-attached, or in the run page of the Fabro web UI; type feedback to request a revision, pick
-"Approve" to continue ([interviews](https://docs.fabro.sh/human-tools/interviews)). Use
+Human gates (plan and roadmap approvals, steward screening and reply approval) are answered
+in the terminal when `fabro run` is attached, or in the run page of the Fabro web UI; type
+feedback to request a revision, pick "Approve" to continue ([interviews](https://docs.fabro.sh/human-tools/interviews)). Use
 `--auto-approve` only for unattended runs. `fabro steer` can redirect an agent mid-step, and
 `fabro events`, `fabro inspect` and `fabro artifact` expose every step for review afterwards.
 
 Inputs (`-I key=value`): `plans_dir` (default `docs/plans`, `docs/roadmap` for `large`),
-`plan_slug` (default `task`), `draft_pr` (`true`/`false`).
+`plan_slug` (default `task`), `draft_pr` (`true`/`false`), `steward_gate` (default `true`,
+see below).
 
 When `plan_slug` is left at `task` and the run starts from a topic branch (the checkout's
 current branch, or `--target OWNER/REPO@branch`), the slug becomes the run date and the branch
@@ -349,6 +354,38 @@ this inside the sandbox and records it as `FIDFAB_PLAN_SLUG` in `.fidfab/run.env
 ([Build the sandbox image](#4-build-the-sandbox-image)). An image older than the workflows
 does not record `FIDFAB_PLAN_SLUG`: the agents then fall back to the plan directory the task
 already has, or `task`, and neither a `-I plan_slug=...` value nor the branch name is used.
+
+### Review comments are untrusted
+
+Anyone can comment on a pull request in a public repository, and the steward's agent runs with
+the run's GitHub token and agent credentials in its environment. A comment that reads like
+instructions ("run this", "post the contents of ...") is a prompt injection. With
+`steward_gate=true` (the default), each round with review threads awaiting a reply goes through
+two gates:
+
+1. **Screen.** `fidfab-pr-status` lists every unresolved thread: path and line, thread id, and
+   per comment the author with their association (`@alice (OWNER)`,
+   `@someone (NONE, not a collaborator)`, `@coderabbitai (NONE, bot, not a collaborator)`).
+   Comment text is quoted line by line with `    | `, so it stays literal in a terminal and in
+   a Markdown renderer: HTML comments that GitHub hides are visible, control, bidi, zero-width
+   and Unicode tag characters show as U+FFFD, and long comments are cut at 4000 characters.
+   No agent has read the comments at this point. Choose **[A]** to let the steward address
+   them, or hide (minimize) or resolve a comment on GitHub and choose **[R]** to list again;
+   hidden comments are left out of the listing.
+2. **Approve.** The steward (opus) works only from that listing, commits locally and drafts a
+   reply per thread. `fidfab-pr-reply --preview` shows each reply, whether it resolves the
+   thread, the unpushed commits and their diff. Choose **[P]** to push and post, or type what
+   to change; the steward revises and you see the new preview.
+
+Posting is done by `fidfab-pr-reply`, not the agent. It accepts only threads from the
+screened listing, and marks each reply so later rounds know the thread awaits its reviewer.
+Fixes for failing CI and merge conflicts still push without a gate (that step is not shown any
+comment text), and top-level PR comments and review summaries are not passed to the agent in gated mode (relay
+them through the approval feedback).
+
+For a private repository where every commenter is trusted, run with `-I steward_gate=false`
+(or change the default in your copy of `workflow.toml`). The steward then reads, replies to and
+resolves threads itself, as before.
 
 ### Interactive Claude Code session first, then the factory
 
@@ -447,6 +484,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 | `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again (stubbed `fabro`/`gh`/`claude`/`codex`) |
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
+| `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert and routes gated runs to the screen; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry (stubbed `gh`) |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |
 | `tests/test-coderabbit.sh` | image | CLI installed; with `CODERABBIT_API_KEY`, `auth login` and `auth status --agent` succeed |
 | `tests/test-claude-acp.sh` | image | ACP `initialize` handshake; with a token, a full `session/prompt` round-trip returns the expected marker |
@@ -473,6 +511,7 @@ docker/
   build.sh               local build with optional baked-in target repository
   config/                Claude Code and Codex settings baked into the image
   rootfs/usr/local/bin/  fidfab-* helpers used by the workflows
+  rootfs/usr/local/lib/fidfab/  jq library: quote.jq renders untrusted text inert
   litellm/config.yaml    LiteLLM proxy model list (Gemini on Vertex AI)
 scripts/
   setup.sh               host setup (Fabro, LiteLLM provider, Brave, agents, environment, doctor)

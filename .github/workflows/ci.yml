@@ -36,6 +36,8 @@ jobs:
         run: tests/test-bootstrap.sh
       - name: build.sh keeps the image's claude and codex at least as new as the host's
         run: tests/test-build.sh
+      - name: PR steward helpers quote comments and post only screened replies
+        run: tests/test-pr-steward.sh
       - name: shellcheck
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q shellcheck >/dev/null
