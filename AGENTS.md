@@ -22,6 +22,8 @@ a Docker sandbox image and tests. Keep the following in mind.
 - `scripts/sync-components.sh --check` must pass.
 - `tests/test-bootstrap.sh` must pass after any change to `fidfab-bootstrap`.
 - `tests/test-build.sh` must pass after any change to `docker/build.sh`.
+- `tests/test-pr-steward.sh` must pass after any change to `fidfab-pr-status`,
+  `fidfab-pr-reply` or `quote.jq`.
 - `shellcheck -S warning` on all shell scripts; `node --check tests/acp-smoke.mjs`.
 - If `docker` is available, `docker/build.sh && tests/test-image.sh` is the full check.
 
@@ -38,6 +40,9 @@ a Docker sandbox image and tests. Keep the following in mind.
   mis-prefix prompt paths).
 - `{{ secrets.* }}` is only valid inside `[run.environment.env]`; `{{ env.* }}` is not supported.
 - Human gate free text appears to downstream nodes as `human.gate.text`.
+  A script node can capture it with `stdin_source="human.gate.text"`.
+- `-I key=false` arrives as a boolean, not the string `"false"` the `[run.inputs]` default may
+  be; compare with `inputs.key|string == "false"` in prompt conditionals.
 - Prompts and `script=` are rendered once, when the run is created, from `goal`, `inputs` and
   `vars` only (`script=` takes plain `{{ inputs.NAME }}` substitution, shell-quoted). Anything
   known only inside the sandbox, such as the plan slug derived from the branch, is recorded by

@@ -32,6 +32,12 @@ plans_dir = "docs/roadmap"
 plan_slug = "task"
 # Open the pull request as a draft ("true" / "false").
 draft_pr = "false"
+# Review comments are untrusted input to an agent that holds this run's credentials: anyone
+# can comment on a public pull request. With "true" the PR steward shows each unresolved
+# thread (author, quoted text) to a human before any agent reads it, and again before it
+# posts replies or pushes. Set "false" only for private repositories where every commenter
+# is trusted (-I steward_gate=false).
+steward_gate = "true"
 
 # ---------------------------------------------------------------------------
 # Sandbox: the locally built fidfab image (see README "Build the image").

@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# fidfab-pr-reply — show or post the PR steward's proposed review-thread replies.
+#
+# Usage: fidfab-pr-reply --preview   print the replies, unpushed commits and diff for the human
+#        fidfab-pr-reply             push, then resolve threads and post the replies
+#
+# The steward writes its replies to .fidfab/reviews/steward-replies.json:
+#   [{"thread": "<review thread id>", "body": "<reply>", "resolve": true | false}, ...]
+# Only threads in .fidfab/reviews/pr-threads.json (the listing fidfab-pr-status produced and
+# the human screened) are accepted. Each entry is removed once its reply is posted, so a retry
+# after a failed reply does not repeat the replies already posted.
+set -euo pipefail
+[[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
+lib="$(dirname "$(readlink -f "$0")")/../lib/fidfab"
+out=.fidfab/reviews
+replies="$out/steward-replies.json"
+threads="$out/pr-threads.json"
+# fidfab-pr-status treats a thread whose last comment is ours and carries this as answered.
+marker='<!-- fidfab-steward -->'
+
+# Print why the replies cannot be posted; nothing when they can (or there are none).
+problems() {
+  [[ -f "$replies" ]] || return 0
+  [[ -f "$threads" ]] || { echo "no screened thread listing ($threads)"; return 0; }
+  jq -r --slurpfile t "$threads" '
+    if type != "array" then "the replies file is not a JSON array"
+    else to_entries[] | .key as $i | .value
+      | if type != "object" or (.thread | type) != "string" or (.body | type) != "string" or .body == ""
+        then "entry \($i + 1): needs a string \"thread\" and a non-empty string \"body\""
+        elif (.thread | IN($t[0][].id)) | not
+        then "entry \($i + 1): thread \(.thread) is not in the screened listing"
+        elif (.body | length) > 20000
+        then "entry \($i + 1): the reply is longer than 20000 characters, more than the preview shows"
+        else empty end
+    end' "$replies" 2>&1 || echo "the replies file is not valid JSON"
+}
+
+quote() { jq -Rrs -L "$lib" --argjson max "$1" 'include "quote"; quote($max)'; }
+
+if [[ "${1:-}" == --preview ]]; then
+  p="$(problems)"
+  if [[ -n "$p" ]]; then
+    printf 'NOT POSTABLE: approving now fails without posting anything. Type what to fix:\n%s\n\n' "$p" | quote 4000
+    echo
+  fi
+  if [[ ! -f "$replies" ]]; then
+    echo "No replies proposed."
+  elif jq -e 'type == "array"' "$replies" >/dev/null 2>&1; then
+    t_file="$threads"; [[ -f "$t_file" ]] || t_file=/dev/null
+    jq -r -L "$lib" --slurpfile t "$t_file" 'include "quote";
+      ($t[0] // [] | map({key: .id, value: .}) | from_entries) as $by
+      | to_entries[] | .key as $i | .value | ($by[.thread | tostring] // {}) as $th
+      | "--- Reply \($i + 1)  thread \(.thread | tostring | inert)  \($th.path // "?" | inert):\($th.line // "?")"
+        + "  to @\($th.to // "?")  resolve: \(if .resolve == true then "yes" else "no" end)",
+        "", (.body | tostring | quote(20000)), ""' "$replies"
+  fi
+  echo
+  if git rev-parse -q --verify '@{u}' >/dev/null; then
+    echo "Unpushed commits (pushed when you approve):"
+    echo
+    git log --stat --format='%h %s' '@{u}..HEAD' | quote 20000
+    echo
+    echo "Diff:"
+    echo
+    git diff '@{u}...HEAD' | quote 60000
+  else
+    echo "The branch has no upstream: approving will fail at git push."
+  fi
+  if [[ -n "$(git status --porcelain)" ]]; then
+    echo
+    echo "Uncommitted changes (not pushed):"
+    git status --short | quote 4000
+  fi
+  exit 0
+fi
+
+p="$(problems)"
+if [[ -n "$p" ]]; then
+  printf 'fidfab-pr-reply: refusing to post anything:\n%s\n' "$p" >&2
+  exit 1
+fi
+# Replies may cite the new commits, so those go up first.
+git push
+[[ -f "$replies" ]] || { echo "No replies to post."; exit 0; }
+printf '\n## %s fidfab-pr-reply\n\n' "$(date -u +%FT%TZ)" >> "$out/steward-log.md"
+while [[ "$(jq length "$replies")" -gt 0 ]]; do
+  thread="$(jq -r '.[0].thread' "$replies")"
+  # Resolve first: it is idempotent, so only the reply itself must not be repeated on a retry.
+  if [[ "$(jq '.[0].resolve == true' "$replies")" == true ]]; then
+    gh api graphql -f query='mutation($t:ID!){ resolveReviewThread(input:{threadId:$t}){ thread { isResolved } } }' \
+      -f t="$thread" >/dev/null
+  fi
+  posted="$(gh api graphql -f query='mutation($t:ID!,$b:String!){ addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$t, body:$b}){ comment { url } } }' \
+    -f t="$thread" -f b="$(jq -r '.[0].body' "$replies")"$'\n\n'"$marker" --jq '.data.addPullRequestReviewThreadReply.comment.url')"
+  jq '.[1:]' "$replies" > "$replies.tmp" && mv "$replies.tmp" "$replies"
+  echo "- replied to $thread: $posted" | tee -a "$out/steward-log.md"
+done
+rm -f "$replies"
