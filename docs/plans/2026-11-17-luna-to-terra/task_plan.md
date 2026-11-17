@@ -26,9 +26,9 @@ Run the checks AGENTS.md requires and exercise the wrapper.
 
 ## Acceptance criteria
 
-- [x] `fidfab-codex-acp --model terra` (and no `--model`) resolves to `gpt-5.6-terra`;
+- [x] `fidfab-codex-acp --model terra` (and no `--model`) resolves to `gpt-6.1-terra`;
       `FIDFAB_MODEL_TERRA` overrides it.
-- [x] `docker/config/codex-config.toml` defaults to `gpt-5.6-terra`.
+- [x] `docker/config/codex-config.toml` defaults to `gpt-6.1-terra`.
 - [x] No `luna` reference remains in components, workflows, docker, tests, README or graphs.
 - [x] `tests/test-codex-model.sh` covers the alias resolution and config default on the host
       (CI `validate` job); `tests/test-codex-acp.sh` runs it against the image.

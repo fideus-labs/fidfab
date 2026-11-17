@@ -263,7 +263,7 @@ select the account and model. Set `FIDFAB_MODEL_OPUS` / `FIDFAB_MODEL_FABLE` in
 `[run.environment.env]` to pin exact model IDs (defaults pass `opus` / `fable` through).
 Workflows name aliases only (`tests/check-model-aliases.sh` rejects literal IDs); the
 Codex `terra` alias is pinned the same way with `FIDFAB_MODEL_TERRA` (default
-`gpt-5.6-terra`). The former `luna` alias was replaced by `terra`: `--model luna` now fails
+`gpt-6.1-terra`). The former `luna` alias was replaced by `terra`: `--model luna` now fails
 with exit 64 and `FIDFAB_MODEL_LUNA` is ignored with a warning.
 
 **OpenAI Codex ACP**

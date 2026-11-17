@@ -4,7 +4,7 @@
 # Usage: fidfab-codex-acp [--model <alias|id>] [--effort <minimal|low|medium|high|xhigh>]
 #
 # Model aliases:
-#   terra -> ${FIDFAB_MODEL_TERRA:-gpt-5.6-terra}   (independent review)
+#   terra -> ${FIDFAB_MODEL_TERRA:-gpt-6.1-terra}   (independent review)
 # Any other value is passed to Codex unchanged. Workflows in this repository use
 # aliases only (tests/check-model-aliases.sh); pin IDs with FIDFAB_MODEL_TERRA.
 # The former luna alias was replaced by terra and is rejected.
@@ -39,7 +39,7 @@ fi
   "ignored since luna was replaced by terra; set FIDFAB_MODEL_TERRA instead" >&2
 
 case "$model" in
-  terra|"") model="${FIDFAB_MODEL_TERRA:-gpt-5.6-terra}" ;;
+  terra|"") model="${FIDFAB_MODEL_TERRA:-gpt-6.1-terra}" ;;
 esac
 
 # CODEX_CONFIG below is JSON built by interpolation; restrict both values to plain tokens so a

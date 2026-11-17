@@ -5,7 +5,7 @@
 - Located all luna references (wrapper, Codex config, two components, `large` workflow,
   README, graph, tests).
 - Renamed alias `luna` -> `terra`, `FIDFAB_MODEL_LUNA` -> `FIDFAB_MODEL_TERRA`, default
-  `gpt-5.6-luna` -> `gpt-5.6-terra`; applied the same edit to the generated component copies
+  `gpt-5.6-luna` -> `gpt-6.1-terra`; applied the same edit to the generated component copies
   (identical to what `scripts/sync-components.sh` produces; `--check` passes).
 - Added offline alias-resolution checks (stub `codex-acp`).
 - Carbon review: moved those checks to the host-runnable `tests/test-codex-model.sh` (repository
@@ -18,7 +18,7 @@
 
 | Check | Result |
 |-------|--------|
-| `tests/test-codex-acp.sh` (worktree wrapper first on PATH, real credentials) | pass; live prompt answered by `gpt-5.6-terra` |
+| `tests/test-codex-acp.sh` (worktree wrapper first on PATH, real credentials) | pass; live prompt answered by `gpt-6.1-terra` |
 | `tests/test-codex-model.sh` (repository files) | pass; against the stale baked wrapper it fails as expected |
 | `tests/test-model-aliases.sh` | pass (13 fixture cases plus the repository) |
 | `tests/test-bootstrap.sh`, `tests/test-pr-steward.sh` | pass |

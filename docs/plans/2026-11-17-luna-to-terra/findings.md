@@ -3,7 +3,7 @@
 - The Codex model is chosen in two places: the `luna` alias in
   `docker/rootfs/usr/local/bin/fidfab-codex-acp` (what every workflow stage uses) and the
   `model =` default in `docker/config/codex-config.toml` (interactive `codex` in the sandbox).
-- Terra model ID: `gpt-5.6-terra`. It is the same generation as the previous `gpt-5.6-luna`
+- Terra model ID: `gpt-6.1-terra`. It is the same generation as the previous `gpt-5.6-luna`
   and appears in the model list of the installed Codex CLI (0.169.0), which also lists
   `gpt-6.1-terra`. The task did not name a generation, so the 5.6 generation was kept; pin a
   different ID with `FIDFAB_MODEL_TERRA` in `[run.environment.env]` or change the default.
