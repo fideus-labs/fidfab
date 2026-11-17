@@ -87,10 +87,10 @@
 <polygon fill="#666666" stroke="#666666" points="255.24,-291.87 252.67,-281.59 248.27,-291.23 255.24,-291.87"/>
 </g>
 <!-- critique -->
-<g id="node7" class="node codex luna review">
+<g id="node7" class="node codex terra review">
 <title>critique</title>
 <ellipse fill="none" stroke="#357f9e" cx="507.73" cy="-491.8" rx="115.02" ry="18"/>
-<text xml:space="preserve" text-anchor="middle" x="507.73" y="-488.2" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a1a1a">Critique roadmap (Codex luna)</text>
+<text xml:space="preserve" text-anchor="middle" x="507.73" y="-488.2" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a1a1a">Critique roadmap (Codex terra)</text>
 </g>
 <!-- gate&#45;&gt;critique -->
 <g id="edge4" class="edge">

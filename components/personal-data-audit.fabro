@@ -6,8 +6,8 @@ digraph PersonalDataAudit {
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]
 
-  decide  [label="Personal data involved? (Codex)", class="codex luna decision",
-           backend="acp", acp.command="fidfab-codex-acp --model luna --effort medium",
+  decide  [label="Personal data involved? (Codex)", class="codex terra decision",
+           backend="acp", acp.command="fidfab-codex-acp --model terra --effort medium",
            prompt="@prompts/personal-data-decision.md", output_schema="routing"]
   audit   [label="Security audit (Cloudflare skill, Claude opus)", class="claude opus security",
            backend="acp", acp.command="fidfab-claude-acp --model opus --effort high",

@@ -4,7 +4,7 @@
 # Usage: fidfab-codex-acp [--model <id>] [--effort <low|medium|high|xhigh>]
 #
 # Model aliases:
-#   luna -> ${FIDFAB_MODEL_LUNA:-gpt-5.6-luna}   (independent review)
+#   terra -> ${FIDFAB_MODEL_TERRA:-gpt-5.6-terra}   (independent review)
 #
 # Credentials: fidfab-bootstrap writes $CODEX_HOME/auth.json from the
 # CODEX_AUTH_JSON_B64 secret (ChatGPT subscription or API key). OPENAI_API_KEY
@@ -24,7 +24,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$model" in
-  luna|"") model="${FIDFAB_MODEL_LUNA:-gpt-5.6-luna}" ;;
+  terra|"") model="${FIDFAB_MODEL_TERRA:-gpt-5.6-terra}" ;;
 esac
 
 export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
