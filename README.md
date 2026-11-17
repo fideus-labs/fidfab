@@ -73,13 +73,15 @@ explicit model use the `[run.model]` in each `workflow.toml` (`vertex-gemini-3.8
 
 Every agent stage sets its effort level explicitly, and `tests/test-effort-levels.sh` checks it
 against this table, using the role word in each node's `class` (`implement`, `review`,
-`security`, ...):
+`security`, ...) and an `override` table for the nodes whose class does not decide the level:
 
 | Stages | Effort |
 |---|---|
 | Claude implementation (`small` and `medium` `implement`) | `xhigh` |
+| Claude planning (`medium` plan and its revisions; `large` roadmap draft, its revisions and the response to the critique) | `xhigh` |
+| Verify and address after the Claude review and the Codex review | `xhigh` |
 | Claude and Codex review (CodeRabbit and built-in review, Codex review, Claude review, security review, personal-data security audit, `large` roadmap critique) | `high` |
-| Every other Claude and Codex stage (planning, roadmap drafting, coverage, verify and address, personal-data decision, commit, pull request, steward) | `medium` |
+| Every other Claude and Codex stage (coverage, verify and address after the other reviews, personal-data decision, commit, pull request, steward) | `medium` |
 | Gemini (Carbon reviews, and the `[run.model]` default) | `medium` |
 
 Claude Code and Codex take the level from `--effort` on the node's `acp.command`; Gemini takes

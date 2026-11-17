@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # test-effort-levels.sh — offline check of the effort level every agent stage runs at.
 #
-# Policy: Claude implementation stages run at xhigh, Claude and Codex review stages at
+# Policy: Claude implementation and planning stages run at xhigh, as do the verify and
+# address stages of the Claude and Codex reviews; Claude and Codex review stages run at
 # high, every other Claude and Codex stage at medium, and Gemini at medium. Every agent
 # node must set its effort explicitly so that no stage inherits an agent default, and
 # carry one role word in its class from which the expected level is derived.
@@ -11,8 +12,12 @@ cd "$here"
 
 # The expected level is derived from the agent and the role word in the node's class
 # (expected_effort below). Nodes whose class does not decide it go here as
-# [<file>:<node>]=<level>; there are none today.
-declare -A override=()
+# [<file>:<node>]=<level>: the verify role runs at medium, except where it addresses the
+# Claude and Codex reviews.
+declare -A override=(
+  [components/claude-review.fabro:address]=xhigh
+  [components/codex-review.fabro:address]=xhigh
+)
 
 # Role words a node class may carry. An agent node without exactly one fails, so a new
 # node cannot slip through at the default.
@@ -21,7 +26,7 @@ roles="implement review security verify plan git decision"
 # expected_effort <agent> <role>
 expected_effort() {
   case "$1:$2" in
-    claude:implement) echo xhigh ;;
+    claude:implement | claude:plan) echo xhigh ;;
     claude:review | claude:security | codex:review | codex:security) echo high ;;
     *) echo medium ;;
   esac

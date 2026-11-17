@@ -9,7 +9,7 @@ digraph ClaudeReview {
            backend="acp", acp.command="fidfab-claude-acp --model fable --effort high",
            prompt="@prompts/review-claude.md"]
   address [label="Verify & address (Claude opus)", class="claude opus verify",
-           backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
+           backend="acp", acp.command="fidfab-claude-acp --model opus --effort xhigh",
            prompt="@prompts/address-claude.md"]
   done    [shape=diamond, label="Claude review addressed"]
 
