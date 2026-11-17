@@ -7,15 +7,23 @@
 - Renamed alias `luna` -> `terra`, `FIDFAB_MODEL_LUNA` -> `FIDFAB_MODEL_TERRA`, default
   `gpt-5.6-luna` -> `gpt-5.6-terra`; applied the same edit to the generated component copies
   (identical to what `scripts/sync-components.sh` produces; `--check` passes).
-- Added offline alias-resolution checks to `tests/test-codex-acp.sh` (stub `codex-acp`).
+- Added offline alias-resolution checks (stub `codex-acp`).
+- Carbon review: moved those checks to the host-runnable `tests/test-codex-model.sh` (repository
+  wrapper and config by default, installed ones from `tests/test-codex-acp.sh`) and replaced the
+  grep-based alias lint in `tests/validate-workflows.sh` with `tests/check-model-aliases.sh`
+  (parses `--model` in any position, reads only the `case "$model"` block, compares literally),
+  covered by `tests/test-model-aliases.sh`. Both new tests run in CI's `validate` job.
 
 ## Verification
 
 | Check | Result |
 |-------|--------|
 | `tests/test-codex-acp.sh` (worktree wrapper first on PATH, real credentials) | pass; live prompt answered by `gpt-5.6-terra` |
+| `tests/test-codex-model.sh` (repository files) | pass; against the stale baked wrapper it fails as expected |
+| `tests/test-model-aliases.sh` | pass (13 fixture cases plus the repository) |
+| `tests/test-bootstrap.sh`, `tests/test-pr-steward.sh` | pass |
 | `scripts/sync-components.sh --check` | pass |
 | `shellcheck -S warning` on all shell scripts | pass |
 | `node --check tests/acp-smoke.mjs` | pass |
-| `tests/validate-workflows.sh` | not run: `fabro` not installed |
+| `tests/validate-workflows.sh` | alias check passes; `fabro validate` not run: `fabro` not installed |
 | `docker/build.sh && tests/test-image.sh` | not run: docker CLI present but no daemon in the sandbox |

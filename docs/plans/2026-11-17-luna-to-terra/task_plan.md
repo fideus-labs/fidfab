@@ -30,7 +30,8 @@ Run the checks AGENTS.md requires and exercise the wrapper.
       `FIDFAB_MODEL_TERRA` overrides it.
 - [x] `docker/config/codex-config.toml` defaults to `gpt-5.6-terra`.
 - [x] No `luna` reference remains in components, workflows, docker, tests, README or graphs.
-- [x] `tests/test-codex-acp.sh` covers the alias resolution and passes.
+- [x] `tests/test-codex-model.sh` covers the alias resolution and config default on the host
+      (CI `validate` job); `tests/test-codex-acp.sh` runs it against the image.
 - [ ] `tests/validate-workflows.sh` passes. NOT RUN: `fabro` is not installed in the sandbox and
       installing it needs the network; run it on the host or in CI.
 - [x] `scripts/sync-components.sh --check`, `shellcheck -S warning`

@@ -29,6 +29,10 @@ a Docker sandbox image and tests. Keep the following in mind.
   and address nodes of the Claude and Codex reviews do (`xhigh`).
 - `tests/test-bootstrap.sh` must pass after any change to `fidfab-bootstrap`.
 - `tests/test-build.sh` must pass after any change to `docker/build.sh`.
+- `tests/test-model-aliases.sh` must pass after any change to a `.fabro`, a `fidfab-*-acp`
+  wrapper or `tests/check-model-aliases.sh` (`validate-workflows.sh` runs the check too).
+- `tests/test-codex-model.sh` must pass after any change to `fidfab-codex-acp` or
+  `docker/config/codex-config.toml`.
 - `tests/test-pr-steward.sh` must pass after any change to `fidfab-pr-status`,
   `fidfab-pr-reply` or `quote.jq`.
 - `shellcheck -S warning` on all shell scripts; `node --check tests/acp-smoke.mjs`.

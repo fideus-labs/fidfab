@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# test-codex-model.sh — offline check of the Codex model selection: fidfab-codex-acp alias
+# resolution (with a stub codex-acp that prints the config it was given) and the default
+# model in the Codex config. Needs no credentials, network or image.
+#
+# Usage: tests/test-codex-model.sh [wrapper] [config.toml]
+#   Defaults to the repository's docker/rootfs/usr/local/bin/fidfab-codex-acp and
+#   docker/config/codex-config.toml; tests/test-codex-acp.sh passes the installed ones.
+set -euo pipefail
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+wrapper="$(realpath "${1:-$root/docker/rootfs/usr/local/bin/fidfab-codex-acp}")"
+config="${2:-$root/docker/config/codex-config.toml}"
+
+stub="$(mktemp -d)"; trap 'rm -rf "$stub"' EXIT
+printf '#!/bin/sh\nprintf "%%s\\n" "$CODEX_CONFIG"\n' > "$stub/codex-acp"; chmod +x "$stub/codex-acp"
+fail=0
+# expect NAME EXPECTED_CONFIG_GLOB ENV... -- ARGS...
+expect() {
+  local name="$1" want="$2" got envs=(); shift 2
+  while [[ $# -gt 0 && "$1" != -- ]]; do envs+=("$1"); shift; done; shift
+  got="$(cd "$stub" && env -u FIDFAB_MODEL_TERRA PATH="$stub:$PATH" CODEX_HOME="$stub/home" "${envs[@]}" "$wrapper" "$@")" || got="<exit $?>"
+  # shellcheck disable=SC2053  # $want is a glob on purpose
+  if [[ "$got" == $want ]]; then echo "ok   $name"; else echo "FAIL $name: got $got"; fail=1; fi
+}
+m() { printf '{"model":"%s",*' "$1"; }
+
+expect "terra alias"                 "$(m gpt-5.6-terra)"  -- --model terra
+expect "no --model defaults to terra" "$(m gpt-5.6-terra)" --
+expect "FIDFAB_MODEL_TERRA override" "$(m pinned-id)"      FIDFAB_MODEL_TERRA=pinned-id -- --model terra
+expect "empty override falls back"   "$(m gpt-5.6-terra)"  FIDFAB_MODEL_TERRA= -- --model terra
+expect "literal ID passes through"   "$(m other-id)"       -- --model other-id
+expect "luna is no longer an alias"  "$(m luna)"           FIDFAB_MODEL_LUNA=gpt-5.6-luna -- --model luna
+expect "--effort is passed through"  '{"model":"gpt-5.6-terra",*"model_reasoning_effort":"xhigh"}' -- --model terra --effort xhigh
+expect "--effort before --model"     '{"model":"gpt-5.6-terra",*"model_reasoning_effort":"low"}'   -- --effort low --model terra
+
+if grep -qx 'model = "gpt-5.6-terra"' "$config"; then echo "ok   $config defaults to gpt-5.6-terra"
+else echo "FAIL $config model is '$(grep '^model =' "$config" || true)'"; fail=1; fi
+exit $fail
