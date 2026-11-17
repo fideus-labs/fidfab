@@ -121,9 +121,11 @@ if grep -qF '[run.git.author]' "$tmp/home/.fabro/settings.toml"; then echo "FAIL
 author_cfg 'Ada "A\B" Lovelace' ada@example.com >/dev/null
 author_cfg 'Ada "A\B" Lovelace' ada@example.com >/dev/null
 check "author step restarts the server only when it adds the block" "server restart --no-upgrade-check"
-# Each line once: a second block doubles the count, wrong escaping drops the name line.
-n="$(grep -cxF -e '[run.git.author]' -e 'name = "Ada \"A\\B\" Lovelace"' -e 'email = "ada@example.com"' "$tmp/home/.fabro/settings.toml" || true)"
-if [[ "$n" == 3 ]]; then echo "ok   author step writes git config identity once, TOML-escaped"; else echo "FAIL author step: $n of 3 lines"; fail=1; fi
+# The matching lines must be exactly these, once each: a second block repeats them, wrong
+# escaping drops the name line.
+want="$(printf '%s\n' '[run.git.author]' 'name = "Ada \"A\\B\" Lovelace"' 'email = "ada@example.com"')"
+got="$(grep -xF -f <(printf '%s\n' "$want") "$tmp/home/.fabro/settings.toml" || true)"
+if [[ "$got" == "$want" ]]; then echo "ok   author step writes git config identity once, TOML-escaped"; else echo "FAIL author step: $got"; fail=1; fi
 if [[ "$(author_cfg Other other@example.com)" == *WARNING* ]]; then echo "ok   author step warns when git config changed"; else echo "FAIL author step: no warning"; fail=1; fi
 : > "$FIDFAB_TEST_LOG"
 
