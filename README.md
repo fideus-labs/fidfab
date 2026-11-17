@@ -173,6 +173,19 @@ ChatGPT-subscription credential that Fabro routes through the Codex backend
 on Gemini through LiteLLM (next step) and the Codex stages authenticate with `CODEX_AUTH_JSON_B64`
 (step 5).
 
+`scripts/setup.sh author` then makes run commits carry your own identity instead of the GitHub
+token's login and noreply address: it appends
+[`[run.git.author]`](https://docs.fabro.sh/administration/server-configuration#run-git-author-section)
+with `git config user.name` and `user.email` to `~/.fabro/settings.toml` and restarts the server.
+Fabro injects them as `GIT_AUTHOR_*` and `GIT_COMMITTER_*` into every run. An existing block is
+kept, without a restart; the step warns when it no longer matches `git config`.
+
+```toml
+[run.git.author]
+name = "Your Name"
+email = "you@example.com"
+```
+
 ### 2. Gemini on Vertex AI through LiteLLM
 
 Fabro's native nodes call Gemini on Vertex AI through a local
@@ -498,7 +511,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 |---|---|---|
 | `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow |
 | `scripts/sync-components.sh --check` | host, CI | vendored components match `components/` |
-| `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again (stubbed `fabro`/`gh`/`claude`/`codex`) |
+| `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again; the `author` step writes `git config` identity to `[run.git.author]` once (stubbed `fabro`/`gh`/`claude`/`codex`) |
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert and routes gated runs to the screen; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry (stubbed `gh`) |
@@ -531,7 +544,7 @@ docker/
   rootfs/usr/local/lib/fidfab/  jq library: quote.jq renders untrusted text inert
   litellm/config.yaml    LiteLLM proxy model list (Gemini on Vertex AI)
 scripts/
-  setup.sh               host setup (Fabro, LiteLLM provider, Brave, agents, environment, doctor)
+  setup.sh               host setup (Fabro, git author, LiteLLM provider, Brave, agents, environment, doctor)
   litellm-proxy.sh       init/start/stop/status/test the local LiteLLM proxy for Vertex AI
   sync-components.sh     vendor components/ into workflow directories
   render-graphs.sh       docs/graphs/*.svg

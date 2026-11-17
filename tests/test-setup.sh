@@ -3,7 +3,8 @@
 # step (and with it the "OpenAI (Codex) detected" device-login prompt) whenever gh is
 # logged in, and falls back to the interactive wizard otherwise, and that the environment
 # step writes its settings.toml block exactly once, and that a secret already in the vault
-# is not requested again. Stubs fabro, gh, claude and codex.
+# is not requested again, and that the author step copies git config user.name/email into
+# [run.git.author]. Stubs fabro, gh, claude and codex.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -11,7 +12,7 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/bin" "$tmp/home"
 cat > "$tmp/bin/fabro" <<'STUB'
 #!/usr/bin/env bash
-[[ "$1" == install || "$1 ${2:-}" == "secret set" ]] && printf '%s\n' "$*" >> "$FIDFAB_TEST_LOG"
+[[ "$1" == install || "$1 ${2:-}" == "secret set" || "$1 ${2:-}" == "server restart" ]] && printf '%s\n' "$*" >> "$FIDFAB_TEST_LOG"
 [[ "$*" == *--value-stdin* ]] && cat >/dev/null # else the writer can die of SIGPIPE under pipefail
 [[ "$1 ${2:-}" == "secret list" ]] && for n in ${FABRO_STUB_SECRETS:-}; do printf '    "name": "%s",\n' "$n"; done
 [[ "$*" == *--non-interactive* && -n "${FABRO_STUB_FAIL_SCRIPTED:-}" ]] && exit 2
@@ -109,6 +110,20 @@ else echo "FAIL litellm step: sub-table forms or missing medium misread: $out"; 
 out="$(FIDFAB_LITELLM_DIR="$tmp/nolitellm" scripts/setup.sh litellm 2>&1 </dev/null || true)"
 if [[ "$out" != *WARNING*lacks* ]]; then echo "ok   litellm step is quiet about a current block"
 else echo "FAIL litellm step warns about a current block: $out"; fail=1; fi
+: > "$FIDFAB_TEST_LOG"
+
+# author: git config user.name/email land in [run.git.author] once, TOML-escaped.
+author_cfg() { GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0="$1" \
+  GIT_CONFIG_KEY_1=user.email GIT_CONFIG_VALUE_1="$2" scripts/setup.sh author; }
+: > "$FIDFAB_TEST_LOG" # drop the environment step's restarts
+author_cfg Ada '' >/dev/null
+if grep -qF '[run.git.author]' "$tmp/home/.fabro/settings.toml"; then echo "FAIL author step: wrote a block without user.email"; fail=1; else echo "ok   author step skips when user.email is unset"; fi
+author_cfg 'Ada "A\B" Lovelace' ada@example.com >/dev/null
+author_cfg 'Ada "A\B" Lovelace' ada@example.com >/dev/null
+check "author step restarts the server only when it adds the block" "server restart --no-upgrade-check"
+got="$(python3 -c 'import sys, tomllib; a = tomllib.load(open(sys.argv[1], "rb"))["run"]["git"]["author"]; print(a["name"], a["email"])' "$tmp/home/.fabro/settings.toml")"
+if [[ "$got" == 'Ada "A\B" Lovelace ada@example.com' ]]; then echo "ok   author step writes git config identity once"; else echo "FAIL author step: $got"; fail=1; fi
+if [[ "$(author_cfg Other other@example.com)" == *WARNING* ]]; then echo "ok   author step warns when git config changed"; else echo "FAIL author step: no warning"; fail=1; fi
 : > "$FIDFAB_TEST_LOG"
 
 FABRO_STUB_SECRETS="BRAVE_SEARCH_API_KEY CLAUDE_CODE_OAUTH_TOKEN" scripts/setup.sh brave claude >/dev/null
