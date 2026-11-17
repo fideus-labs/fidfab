@@ -71,8 +71,9 @@ review stages is `components/prompts/partials/review-priorities.md`. Native node
 explicit model use the `[run.model]` in each `workflow.toml` (`vertex-gemini-3.8-flash` on the
 `litellm` provider); the Carbon review nodes pin `vertex-gemini-4-carbon`.
 
-Every agent stage sets its effort level explicitly, and `tests/test-effort-levels.sh` pins the
-table:
+Every agent stage sets its effort level explicitly, and `tests/test-effort-levels.sh` checks it
+against this table, using the role word in each node's `class` (`implement`, `review`,
+`security`, ...):
 
 | Stages | Effort |
 |---|---|

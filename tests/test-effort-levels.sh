@@ -3,25 +3,32 @@
 #
 # Policy: Claude implementation stages run at xhigh, Claude and Codex review stages at
 # high, every other Claude and Codex stage at medium, and Gemini at medium. Every agent
-# node must set its effort explicitly so that no stage inherits an agent default.
+# node must set its effort explicitly so that no stage inherits an agent default, and
+# carry one role word in its class from which the expected level is derived.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$here"
 
-# <file>:<node> pairs that are not medium.
-declare -A expected=(
-  [.fabro/workflows/small/workflow.fabro:implement]=xhigh
-  [.fabro/workflows/medium/workflow.fabro:implement]=xhigh
-  [.fabro/workflows/large/workflow.fabro:critique]=high
-  [components/claude-review.fabro:review]=high
-  [components/codex-review.fabro:review]=high
-  [components/security-review.fabro:review]=high
-  [components/coderabbit-review.fabro:review]=high
-  [components/coderabbit-review.fabro:fallback]=high
-  [components/personal-data-audit.fabro:audit]=high
-)
+# The expected level is derived from the agent and the role word in the node's class
+# (expected_effort below). Nodes whose class does not decide it go here as
+# [<file>:<node>]=<level>; there are none today.
+declare -A override=()
 
-# Prints one line per agent node in the given DOT files.
+# Role words a node class may carry. An agent node without exactly one fails, so a new
+# node cannot slip through at the default.
+roles="implement review security verify plan git decision"
+
+# expected_effort <agent> <role>
+expected_effort() {
+  case "$1:$2" in
+    claude:implement) echo xhigh ;;
+    claude:review | claude:security | codex:review | codex:security) echo high ;;
+    *) echo medium ;;
+  esac
+}
+
+# Prints one line per agent node in the given DOT files:
+# <file> <node> <claude|codex|gemini|unknown-acp> <effort or -> <class words...>.
 scan_nodes() {
   awk '
     # A node is an agent when it has a prompt: an ACP node is Claude or Codex by its
@@ -35,9 +42,9 @@ scan_nodes() {
         if (agent == "claude" || agent == "codex") {
           if (match(cmd, /(^| )--effort [^[:space:]"]+/)) { e = substr(cmd, RSTART, RLENGTH); sub(/^ ?--effort /, "", e); effort = e }
         } else if (agent == "gemini" && rfx != "") effort = rfx
-        print FILENAME, node, agent, effort
+        print FILENAME, node, agent, effort (cls == "" ? "" : " " cls)
       }
-      node = ""; prompt = 0; acp = 0; cmd = ""; rfx = ""
+      node = ""; prompt = 0; acp = 0; cmd = ""; rfx = ""; cls = ""
     }
     FNR == 1 { flush() }
     /^[[:space:]]*\/\// { next }
@@ -52,6 +59,7 @@ scan_nodes() {
     /backend="acp"/ { acp = 1 }
     match($0, /acp\.command="[^"]*"/)      { cmd = substr($0, RSTART + 13, RLENGTH - 14) }
     match($0, /reasoning_effort="[^"]*"/)  { rfx = substr($0, RSTART + 18, RLENGTH - 19) }
+    match($0, /(^|[[:space:],\[])class="[^"]*"/) { c = substr($0, RSTART, RLENGTH); sub(/^.*class="/, "", c); sub(/"$/, "", c); cls = c }
     END { flush() }
   ' "$@"
 }
@@ -61,48 +69,80 @@ fixture="$(mktemp)"; trap 'rm -f "$fixture"' EXIT
 cat > "$fixture" <<'DOT'
 digraph T {
   graph [label="t"]
-  native [label="x", prompt="@p.md"]
+  native [label="x", class="gemini review", prompt="@p.md"]
   suffix [backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium-high",
-          prompt="@p.md"]
+          class="claude opus implement", prompt="@p.md"]
   crossed [backend="acp", acp.command="fidfab-codex-acp --model luna", reasoning_effort="medium",
            prompt="@p.md"]
   other [backend="acp", acp.command="some-acp --effort medium", prompt="@p.md"]
-  ok[backend="acp", acp.command="fidfab-codex-acp --effort high",
+  ok[backend="acp", acp.command="fidfab-codex-acp --effort high", class="codex review",
      prompt="@p.md"]
+  lowrev [backend="acp", acp.command="fidfab-claude-acp --effort medium", class="claude review", prompt="@p.md"]
+  norole [backend="acp", acp.command="fidfab-codex-acp --effort medium", prompt="@p.md"]
   // ghost [backend="acp", acp.command="fidfab-claude-acp --effort medium", prompt="@p.md"]
   tool [script="true"]
   ok -> tool [label="x", prompt="@p.md"]
 }
 DOT
 got="$(scan_nodes "$fixture" | cut -d' ' -f2-)"
-want="native gemini -
-suffix claude medium-high
+want="native gemini - gemini review
+suffix claude medium-high claude opus implement
 crossed codex -
 other unknown-acp -
-ok codex high"
+ok codex high codex review
+lowrev claude medium claude review
+norole codex medium"
 [[ "$got" == "$want" ]] || { echo "FAIL: scanner self-test; got:" >&2; echo "$got" >&2; exit 1; }
 
 status=0
 fail() { echo "FAIL: $*" >&2; status=1; }
+
+# check_nodes <dot files...>: checks every agent node against the policy; prints failures.
+check_nodes() {
+  local file node agent effort cls key role want w n
+  while read -r file node agent effort cls; do
+    key="$file:$node"
+    echo "seen $key"
+    [[ "$agent" == unknown-acp ]] && { echo "FAIL: $key: ACP node with an unrecognised acp.command"; continue; }
+    role=""; n=0
+    for w in $cls; do
+      [[ " $roles " == *" $w "* ]] && { role="$w"; n=$((n + 1)); }
+    done
+    if [[ -n "${override[$key]:-}" ]]; then
+      want="${override[$key]}"
+    elif [[ $n -ne 1 ]]; then
+      echo "FAIL: $key: class '$cls' must carry exactly one role word ($roles)"; continue
+    else
+      want="$(expected_effort "$agent" "$role")"
+    fi
+    [[ "$agent" == gemini && "$want" != medium ]] && echo "FAIL: $key: Gemini nodes run at medium"
+    [[ "$effort" == "$want" ]] || echo "FAIL: $key ($agent ${role:-no role}): effort is '$effort', expected '$want'"
+  done < <(scan_nodes "$@")
+}
+
+# Self-test of the policy on the fixture: the mis-levelled review node and the node
+# without a role must fail, the well-formed review node must pass.
+got="$(check_nodes "$fixture" | grep '^FAIL' | sed "s|$fixture:||")"
+for want in "FAIL: lowrev (claude review): effort is 'medium', expected 'high'" \
+  "FAIL: norole: class '' must carry exactly one role word ($roles)" \
+  "FAIL: suffix (claude implement): effort is 'medium-high', expected 'xhigh'" \
+  "FAIL: other: ACP node with an unrecognised acp.command"; do
+  grep -qxF -- "$want" <<<"$got" || { echo "FAIL: policy self-test lacks: $want; got:" >&2; echo "$got" >&2; exit 1; }
+done
+grep -q '^FAIL: ok[ :]' <<<"$got" && { echo "FAIL: policy self-test rejected a correct node" >&2; exit 1; }
+
 declare -A seen=()
 agents=0
-
-# One line per agent node: <file> <node> <claude|codex|gemini|unknown-acp> <effort or ->.
-while read -r file node agent effort; do
-  agents=$((agents + 1))
-  key="$file:$node"
-  seen[$key]=1
-  want="${expected[$key]:-medium}"
-  [[ "$agent" == unknown-acp ]] && { fail "$key: ACP node with an unrecognised acp.command"; continue; }
-  [[ "$agent" == gemini && "$want" != medium ]] && fail "$key: Gemini nodes run at medium"
-  [[ "$effort" == "$want" ]] || fail "$key ($agent): effort is '$effort', expected '$want'"
-done < <(
-  scan_nodes components/*.fabro .fabro/workflows/*/workflow.fabro
-)
+while read -r line; do
+  case "$line" in
+    "seen "*) seen[${line#seen }]=1; agents=$((agents + 1)) ;;
+    *) fail "${line#FAIL: }" ;;
+  esac
+done < <(check_nodes components/*.fabro .fabro/workflows/*/workflow.fabro)
 
 [[ $agents -gt 0 ]] || fail "no agent nodes found"
-for key in "${!expected[@]}"; do
-  [[ -n "${seen[$key]:-}" ]] || fail "$key: expected node not found"
+for key in "${!override[@]}"; do
+  [[ -n "${seen[$key]:-}" ]] || fail "$key: override for a node that does not exist"
 done
 
 # Gemini default for Fabro-native nodes without an explicit model.

@@ -22,8 +22,10 @@ a Docker sandbox image and tests. Keep the following in mind.
 - `scripts/sync-components.sh --check` must pass.
 - `tests/test-effort-levels.sh` must pass after any change to an agent node. Every Claude Code,
   Codex and Gemini node sets its effort explicitly: Claude implementation `xhigh`, Claude and
-  Codex review `high`, everything else `medium`. A node that departs from `medium` is listed in
-  that test.
+  Codex review `high`, everything else `medium`. The test derives the level from the agent and
+  the role word in the node's `class` (`implement`, `review`, `security`, `verify`, `plan`,
+  `git`, `decision`), so every agent node carries exactly one; a node whose class does not
+  decide its level goes in the test's `override` table.
 - `tests/test-bootstrap.sh` must pass after any change to `fidfab-bootstrap`.
 - `tests/test-build.sh` must pass after any change to `docker/build.sh`.
 - `tests/test-pr-steward.sh` must pass after any change to `fidfab-pr-status`,

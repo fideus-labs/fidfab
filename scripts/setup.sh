@@ -79,19 +79,34 @@ step_fabro() {
 }
 
 # litellm_model_has <model> <capabilities.reasoning_effort|protocol_options.reasoning_effort_levels = true>
-# True when that key is set inside [llm.providers.litellm.models."<model>"] of $SETTINGS
-# (inline-table or dotted form; comments ignored).
+# True when that key is set for [llm.providers.litellm.models."<model>"] of $SETTINGS, in
+# inline-table, dotted or sub-table form (comments ignored). capabilities.reasoning_effort
+# must include medium = true, the level the workflows request.
+# shortcut: line-based, so a table value spread over several lines is not recognised.
 litellm_model_has() {
-  awk -v hdr="[llm.providers.litellm.models.\"$1\"]" -v key="$2" '
+  awk -v base="[llm.providers.litellm.models.\"$1\"" -v key="$2" '
     { line = $0; sub(/#.*/, "", line) }
-    line ~ /^[[:space:]]*\[/ { t = line; gsub(/^[[:space:]]+|[[:space:]]+$/, "", t); in_s = (t == hdr); next }
-    !in_s { next }
+    line ~ /^[[:space:]]*\[/ {
+      t = line; gsub(/^[[:space:]]+|[[:space:]]+$/, "", t)
+      in_s = 0; prefix = ""
+      if (t == base "]") in_s = 1
+      else if (index(t, base ".") == 1 && substr(t, length(t)) == "]") {
+        in_s = 1; prefix = substr(t, length(base) + 2); prefix = substr(prefix, 1, length(prefix) - 1) "."
+      }
+      next
+    }
+    !in_s || line !~ /=/ { next }
+    {
+      # <prefix><key>=<value> with all whitespace removed, e.g. capabilities.reasoning_effort={low=true,...}
+      s = prefix line; gsub(/[[:space:]]/, "", s)
+    }
     key == "capabilities.reasoning_effort" &&
-      (line ~ /^[[:space:]]*capabilities[[:space:]]*=.*[{,[:space:]]reasoning_effort[[:space:]]*=/ ||
-       line ~ /^[[:space:]]*capabilities\.reasoning_effort[[:space:]]*=/) { found = 1 }
+      (s ~ /^capabilities=\{.*reasoning_effort=\{[^}]*medium=true/ ||
+       s ~ /^capabilities\.reasoning_effort=\{[^}]*medium=true/ ||
+       s ~ /^capabilities\.reasoning_effort\.medium=true/) { found = 1 }
     key == "protocol_options.reasoning_effort_levels = true" &&
-      (line ~ /^[[:space:]]*protocol_options[[:space:]]*=.*[{,[:space:]]reasoning_effort_levels[[:space:]]*=[[:space:]]*true/ ||
-       line ~ /^[[:space:]]*protocol_options\.reasoning_effort_levels[[:space:]]*=[[:space:]]*true/) { found = 1 }
+      (s ~ /^protocol_options=\{.*reasoning_effort_levels=true/ ||
+       s ~ /^protocol_options\.reasoning_effort_levels=true/) { found = 1 }
     END { exit !found }
   ' "$SETTINGS" 2>/dev/null
 }

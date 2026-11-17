@@ -21,4 +21,5 @@
   `audit`, `large` `critique`. Implementation, `xhigh`: `implement` in `small` and `medium`.
   Everything else `medium`, which lowers the `large` roadmap `draft` from `max` and its Codex
   `critique` from `xhigh`, and the baked Codex default from `high`.
-- `tests/test-effort-levels.sh` holds the table; a node without an explicit effort fails it.
+- `tests/test-effort-levels.sh` derives the expected level from agent + class role word (Claude
+  review fix); a node without an explicit effort, or without a role word, fails it.

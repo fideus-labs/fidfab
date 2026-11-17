@@ -87,6 +87,25 @@ if [[ "$out" == *'models."vertex-gemini-4-carbon"] lacks capabilities.reasoning_
       "$out" != *'models."vertex-gemini-3.8-flash"] lacks'* ]]; then
   echo "ok   litellm step checks each Gemini model section"
 else echo "FAIL litellm step: partly updated block not reported per model: $out"; fail=1; fi
+# Sub-table and dotted forms count; an effort table without medium does not.
+awk '/^\[llm\.providers\.litellm\.models\."vertex-gemini-4-carbon"\]/ { carbon = 1 }
+     carbon && /^capabilities = / { next }
+     carbon && /^protocol_options = / { next }
+     { print }
+     END { print "[llm.providers.litellm.models.\"vertex-gemini-4-carbon\".capabilities]"
+           print "text = true"
+           print "reasoning_effort = { low = true, high = true }   # no medium"
+           print "[llm.providers.litellm.models.\"vertex-gemini-4-carbon\".protocol_options]"
+           print "reasoning_effort_levels = true"
+           print "[llm.providers.litellm.models.\"vertex-gemini-3.8-flash\".capabilities.reasoning_effort]"
+           print "medium = true" }' "$tmp/home/.fabro/settings.toml" > "$tmp/oldhome/.fabro/settings.toml"
+sed -i '/^\[llm\.providers\.litellm\.models\."vertex-gemini-3\.8-flash"\]/,/^$/{/^capabilities = /d}' "$tmp/oldhome/.fabro/settings.toml"
+out="$(HOME="$tmp/oldhome" FIDFAB_LITELLM_DIR="$tmp/nolitellm" scripts/setup.sh litellm 2>&1 </dev/null || true)"
+if [[ "$out" == *'models."vertex-gemini-4-carbon"] lacks capabilities.reasoning_effort'* &&
+      "$out" != *'models."vertex-gemini-4-carbon"] lacks protocol_options'* &&
+      "$out" != *'models."vertex-gemini-3.8-flash"] lacks'* ]]; then
+  echo "ok   litellm step reads sub-table forms and requires medium"
+else echo "FAIL litellm step: sub-table forms or missing medium misread: $out"; fail=1; fi
 out="$(FIDFAB_LITELLM_DIR="$tmp/nolitellm" scripts/setup.sh litellm 2>&1 </dev/null || true)"
 if [[ "$out" != *WARNING*lacks* ]]; then echo "ok   litellm step is quiet about a current block"
 else echo "FAIL litellm step warns about a current block: $out"; fail=1; fi

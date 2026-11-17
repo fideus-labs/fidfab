@@ -258,6 +258,12 @@ Model selection in the workflows:
   existing `[llm.providers.litellm]` block alone, so add those two keys by hand to a
   `settings.toml` written before they existed (the step warns for each Gemini model row that lacks
   either key).
+- Not yet confirmed on a live server: `fabro validate` accepts any `reasoning_effort` value on a
+  node, and Fabro drops the effort without an error if the catalog keys are wrong, so the
+  offline tests cannot show that `medium` reaches Gemini. To confirm, run one Carbon review with
+  the proxy's request logging turned up (LiteLLM debug logging, followed with
+  `scripts/litellm-proxy.sh logs`) and check that the request for `gemini-4-carbon` carries
+  `reasoning_effort: "medium"`. Replace this item with the result.
 
 The `base_url` uses `localhost` because the Fabro server runs on the host and makes the model
 calls itself; the sandbox containers never talk to the proxy. If you run the Fabro server in
