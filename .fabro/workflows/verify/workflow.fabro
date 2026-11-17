@@ -4,7 +4,7 @@
 // worktree): push the branch, then run only the verification pipeline on its
 // diff → PR → steward loop.
 digraph FidfabVerify {
-  graph [max_node_visits=50, label="fidfab verify"]
+  graph [max_node_visits=50, stall_timeout="2h", label="fidfab verify"]
 
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]
