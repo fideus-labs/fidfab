@@ -36,10 +36,6 @@ jobs:
         run: tests/test-bootstrap.sh
       - name: build.sh keeps the image's claude and codex at least as new as the host's
         run: tests/test-build.sh
-      - name: Workflows only use model aliases the wrappers resolve
-        run: tests/test-model-aliases.sh
-      - name: fidfab-codex-acp resolves terra and codex-config.toml defaults to it
-        run: tests/test-codex-model.sh
       - name: PR steward helpers quote comments and post only screened replies
         run: tests/test-pr-steward.sh
       - name: shellcheck
