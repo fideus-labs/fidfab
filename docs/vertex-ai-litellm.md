@@ -263,7 +263,10 @@ Model selection in the workflows:
   offline tests cannot show that `medium` reaches Gemini. To confirm, run one Carbon review with
   the proxy's request logging turned up (LiteLLM debug logging, followed with
   `scripts/litellm-proxy.sh logs`) and check that the request for `gemini-4-carbon` carries
-  `reasoning_effort: "medium"`. Replace this item with the result.
+  `reasoning_effort: "medium"`. Debug logging records whole request bodies, that is the
+  prompts with the target repository's diffs and source, in the proxy container's Docker log:
+  run the check against a repository without personal data, turn debug logging off afterwards,
+  and recreate the proxy container to drop its logs. Replace this item with the result.
 
 The `base_url` uses `localhost` because the Fabro server runs on the host and makes the model
 calls itself; the sandbox containers never talk to the proxy. If you run the Fabro server in
