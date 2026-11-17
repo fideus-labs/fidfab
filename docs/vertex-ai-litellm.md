@@ -256,7 +256,8 @@ Model selection in the workflows:
   Fabro requests an effort level only from a model whose catalog row declares it, which is what
   `reasoning_effort` in `capabilities` and `protocol_options` above are for. `setup.sh` leaves an
   existing `[llm.providers.litellm]` block alone, so add those two keys by hand to a
-  `settings.toml` written before they existed (the step warns when they are missing).
+  `settings.toml` written before they existed (the step warns for each Gemini model row that lacks
+  either key).
 
 The `base_url` uses `localhost` because the Fabro server runs on the host and makes the model
 calls itself; the sandbox containers never talk to the proxy. If you run the Fabro server in
