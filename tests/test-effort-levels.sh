@@ -34,6 +34,19 @@ scan_nodes() {
     # A node is an agent when it has a prompt: an ACP node is Claude or Codex by its
     # acp.command, any other prompt node is Fabro-native (Gemini via [run.model] or an
     # explicit provider). Effort is read only from the attribute that backend honours.
+    #
+    # uncomment cuts a // comment off a line; a // inside a quoted string stays.
+    # shortcut: quote state starts fresh on every line, so a string continued over several
+    # lines is not tracked; carry the state across lines if a node ever needs one.
+    function uncomment(s,    i, c, q) {
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (q && c == "\\") i++
+        else if (c == "\"") q = !q
+        else if (!q && c == "/" && substr(s, i + 1, 1) == "/") return substr(s, 1, i - 1)
+      }
+      return s
+    }
     function flush() {
       if (node != "" && prompt) {
         if (acp) agent = (cmd ~ /^fidfab-claude-acp( |$)/ ? "claude" : cmd ~ /^fidfab-codex-acp( |$)/ ? "codex" : "unknown-acp")
@@ -47,7 +60,9 @@ scan_nodes() {
       node = ""; prompt = 0; acp = 0; cmd = ""; rfx = ""; cls = ""
     }
     FNR == 1 { flush() }
-    /^[[:space:]]*\/\// { next }
+    # Attributes are read from code only, in the spelling DOT allows: drop a // comment
+    # and the optional spaces around "=".
+    { $0 = uncomment($0); gsub(/[[:space:]]*=[[:space:]]*"/, "=\"") }
     /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*->/ { flush(); next }
     /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\[/ {
       flush()
@@ -69,7 +84,7 @@ fixture="$(mktemp)"; trap 'rm -f "$fixture"' EXIT
 cat > "$fixture" <<'DOT'
 digraph T {
   graph [label="t"]
-  native [label="x", class="gemini review", prompt="@p.md"]
+  native [label="a // b", class="gemini review", prompt="@p.md"]
   suffix [backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium-high",
           class="claude opus implement", prompt="@p.md"]
   crossed [backend="acp", acp.command="fidfab-codex-acp --model luna", reasoning_effort="medium",
@@ -79,6 +94,8 @@ digraph T {
      prompt="@p.md"]
   lowrev [backend="acp", acp.command="fidfab-claude-acp --effort medium", class="claude review", prompt="@p.md"]
   norole [backend="acp", acp.command="fidfab-codex-acp --effort medium", prompt="@p.md"]
+  gem [class="gemini review", prompt="@p.md"] // reasoning_effort="medium"
+  spaced [backend = "acp", acp.command = "fidfab-claude-acp --effort medium", class = "claude review", prompt = "@p.md"]
   // ghost [backend="acp", acp.command="fidfab-claude-acp --effort medium", prompt="@p.md"]
   tool [script="true"]
   ok -> tool [label="x", prompt="@p.md"]
@@ -91,7 +108,9 @@ crossed codex -
 other unknown-acp -
 ok codex high codex review
 lowrev claude medium claude review
-norole codex medium"
+norole codex medium
+gem gemini - gemini review
+spaced claude medium claude review"
 [[ "$got" == "$want" ]] || { echo "FAIL: scanner self-test; got:" >&2; echo "$got" >&2; exit 1; }
 
 status=0
@@ -126,7 +145,9 @@ got="$(check_nodes "$fixture" | grep '^FAIL' | sed "s|$fixture:||")"
 for want in "FAIL: lowrev (claude review): effort is 'medium', expected 'high'" \
   "FAIL: norole: class '' must carry exactly one role word ($roles)" \
   "FAIL: suffix (claude implement): effort is 'medium-high', expected 'xhigh'" \
-  "FAIL: other: ACP node with an unrecognised acp.command"; do
+  "FAIL: other: ACP node with an unrecognised acp.command" \
+  "FAIL: gem (gemini review): effort is '-', expected 'medium'" \
+  "FAIL: spaced (claude review): effort is 'medium', expected 'high'"; do
   grep -qxF -- "$want" <<<"$got" || { echo "FAIL: policy self-test lacks: $want; got:" >&2; echo "$got" >&2; exit 1; }
 done
 grep -q '^FAIL: ok[ :]' <<<"$got" && { echo "FAIL: policy self-test rejected a correct node" >&2; exit 1; }
