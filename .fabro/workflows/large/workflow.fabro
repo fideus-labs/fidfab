@@ -7,7 +7,7 @@
 // opened as a PR. Each work item is then implemented incrementally with
 // `fidfab medium`.
 digraph FidfabLarge {
-  graph [max_node_visits=50, label="fidfab large"]
+  graph [max_node_visits=50, stall_timeout="2h", label="fidfab large"]
 
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]

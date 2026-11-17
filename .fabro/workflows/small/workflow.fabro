@@ -6,7 +6,7 @@
 // The verification pipeline is spelled out explicitly (one import per stage)
 // so the whole process is readable here and each component stays reusable.
 digraph FidfabSmall {
-  graph [max_node_visits=50, label="fidfab small"]
+  graph [max_node_visits=50, stall_timeout="2h", label="fidfab small"]
 
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]

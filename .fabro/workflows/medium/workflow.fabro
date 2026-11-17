@@ -4,7 +4,7 @@
 // task_plan.md → implement the approved plan → verification pipeline →
 // PR → steward loop.
 digraph FidfabMedium {
-  graph [max_node_visits=50, label="fidfab medium"]
+  graph [max_node_visits=50, stall_timeout="2h", label="fidfab medium"]
 
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]
