@@ -1,12 +1,12 @@
 // Component: codex-review
-// Independent review by Codex (luna) using the fidfab review priorities, then
+// Independent review by Codex (terra) using the fidfab review priorities, then
 // Claude (opus) verifies and addresses each finding and records the approach.
 digraph CodexReview {
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]
 
-  review  [label="Review (Codex luna)", class="codex luna review",
-           backend="acp", acp.command="fidfab-codex-acp --model luna --effort high",
+  review  [label="Review (Codex terra)", class="codex terra review",
+           backend="acp", acp.command="fidfab-codex-acp --model terra --effort high",
            prompt="@prompts/review-codex.md"]
   address [label="Verify & address (Claude opus)", class="claude opus verify",
            backend="acp", acp.command="fidfab-claude-acp --model opus --effort xhigh",

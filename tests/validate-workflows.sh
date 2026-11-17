@@ -4,6 +4,9 @@
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PATH="$HOME/.fabro/bin:$PATH"
+
+# Model aliases first: offline, so it reports even where fabro is not installed.
+"$here/tests/check-model-aliases.sh"
 command -v fabro >/dev/null || { echo "fabro not installed: curl -fsSL https://fabro.sh/install.sh | sh"; exit 1; }
 "$here/scripts/sync-components.sh" --check
 status=0

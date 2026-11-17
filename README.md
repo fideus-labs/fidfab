@@ -42,7 +42,7 @@ uses the full local machine.
                                    docker: fidfab:latest  (Ubuntu 26.04)
                                    ├── /workspace   clone of the target branch
                                    ├── claude-agent-acp ──▶ Claude Code (fable / opus)   subscription
-                                   ├── codex-acp ────────▶ Codex (luna)                  subscription
+                                   ├── codex-acp ────────▶ Codex (terra)                 subscription
                                    ├── coderabbit --agent
                                    ├── pixi, rust, vite+, serena, cocoindex-code, gh
                                    └── fidfab-* helpers (bootstrap, diff, pr-status, …)
@@ -54,7 +54,7 @@ uses the full local machine.
 2. Claude Code implements the approved plan in the sandbox.
 3. The verification pipeline runs over the diff: coverage of uncovered behaviour (opus),
    CodeRabbit review and autonomous fix (opus, with a 3-minute retry and a fallback to Claude's
-   built-in review), Codex (luna) review, Gemini 4 Carbon review, Claude (fable) review, a
+   built-in review), Codex (terra) review, Gemini 4 Carbon review, Claude (fable) review, a
    security review, a second Gemini 4 Carbon security review, a personal-data decision with an optional Cloudflare security audit, each followed by an
    opus "verify and address" pass that writes a Markdown record of the approach taken per finding.
 4. opus writes the commit, opens the PR with `gh pr create --fill`, then rewrites the title and
@@ -93,7 +93,7 @@ Claude Code and Codex take the level from `--effort` on the node's `acp.command`
 |---|---|---|---|
 | `small` | One-shot prompt | none before implementation; steward review screening and reply approval | Branch, verified diff, PR, stewarded to green |
 | `medium` | `task_plan.md` / `findings.md` / `progress.md` via the [planning-with-files](https://github.com/OthmanAdi/planning-with-files) skill | plan approval loop; steward review screening and reply approval | Plan files committed with the implementation, PR |
-| `large` | Research-backed roadmap drafted interactively with Claude fable, critiqued by Codex luna | draft approval, final approval; steward review screening and reply approval | `docs/roadmap/**.md` work items with implementation plans and acceptance criteria, each sized for `medium`; PR |
+| `large` | Research-backed roadmap drafted interactively with Claude fable, critiqued by Codex terra | draft approval, final approval; steward review screening and reply approval | `docs/roadmap/**.md` work items with implementation plans and acceptance criteria, each sized for `medium`; PR |
 | `verify` | Existing branch | steward review screening and reply approval | Verification pipeline only, PR and steward |
 
 The steward gates are on by default and only appear when a PR has review threads awaiting a
@@ -112,7 +112,7 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 | `bootstrap.fabro` | Materialises credentials, ensures the checkout (deepens Fabro's shallow clone, or clones from the image's baked-in repo), attaches warm caches, records base/head refs and the plan slug |
 | `coverage.fabro` | opus checks the diff for uncovered behaviour and adds tests |
 | `coderabbit-review.fabro` | `coderabbit review --agent`; if unavailable, waits 3 minutes and retries, then falls back to Claude's built-in code review; opus fixes issues following section "4. Fix Issues (Autonomous Workflow)" of the [CodeRabbit code-review skill](https://github.com/coderabbitai/skills) |
-| `codex-review.fabro` | Codex (luna) review with the prioritised review prompt, then opus verifies and addresses, writing `docs/plans/<slug>/review-codex.md` |
+| `codex-review.fabro` | Codex (terra) review with the prioritised review prompt, then opus verifies and addresses, writing `docs/plans/<slug>/review-codex.md` |
 | `carbon-review.fabro` | Independent Gemini 4 Carbon review (Fabro-native, through LiteLLM) with the same review priorities, then opus verifies and addresses, writing `.fidfab/reviews/carbon-review-response.md` |
 | `claude-review.fabro` | Same review by Claude (fable), then opus verifies and addresses |
 | `security-review.fabro` | opus security review of the changes, then verify and address |
@@ -261,6 +261,10 @@ fabro secret set CLAUDE_CODE_OAUTH_TOKEN # paste the sk-ant-oat… token
 `claude-agent-acp` honours Claude Code's environment, so the token and `ANTHROPIC_MODEL`
 select the account and model. Set `FIDFAB_MODEL_OPUS` / `FIDFAB_MODEL_FABLE` in
 `[run.environment.env]` to pin exact model IDs (defaults pass `opus` / `fable` through).
+Workflows name aliases only (`tests/check-model-aliases.sh` rejects literal IDs); the
+Codex `terra` alias is pinned the same way with `FIDFAB_MODEL_TERRA` (default
+`gpt-6.1-terra`). The former `luna` alias was replaced by `terra`: `--model luna` now fails
+with exit 64 and `FIDFAB_MODEL_LUNA` is ignored with a warning.
 
 **OpenAI Codex ACP**
 

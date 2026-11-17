@@ -22,8 +22,8 @@ digraph FidfabLarge {
             backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
             prompt="@components/prompts/roadmap-revise.md", max_visits=25]
 
-  critique [label="Critique roadmap (Codex luna)", class="codex luna review",
-            backend="acp", acp.command="fidfab-codex-acp --model luna --effort high",
+  critique [label="Critique roadmap (Codex terra)", class="codex terra review",
+            backend="acp", acp.command="fidfab-codex-acp --model terra --effort high",
             prompt="@components/prompts/roadmap-codex-critique.md"]
   address  [label="Address critique (Claude fable)", class="claude fable plan",
             backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",

@@ -92,7 +92,7 @@ digraph T {
   native [label="a // b", class="gemini review", prompt="@p.md"]
   suffix [backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium-high",
           class="claude opus implement", prompt="@p.md"]
-  crossed [backend="acp", acp.command="fidfab-codex-acp --model luna", reasoning_effort="medium",
+  crossed [backend="acp", acp.command="fidfab-codex-acp --model terra", reasoning_effort="medium",
            prompt="@p.md"]
   other [backend="acp", acp.command="some-acp --effort medium", prompt="@p.md"]
   ok[backend="acp", acp.command="fidfab-codex-acp --effort high", class="codex review",

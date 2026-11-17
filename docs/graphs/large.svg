@@ -87,17 +87,17 @@
 <polygon fill="#666666" stroke="#666666" points="255.24,-291.87 252.67,-281.59 248.27,-291.23 255.24,-291.87"/>
 </g>
 <!-- critique -->
-<g id="node7" class="node codex luna review">
+<g id="node7" class="node codex terra review">
 <title>critique</title>
-<ellipse fill="none" stroke="#357f9e" cx="507.73" cy="-491.8" rx="115.02" ry="18"/>
-<text xml:space="preserve" text-anchor="middle" x="507.73" y="-488.2" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a1a1a">Critique roadmap (Codex luna)</text>
+<ellipse fill="none" stroke="#357f9e" cx="508.73" cy="-491.8" rx="116.29" ry="18"/>
+<text xml:space="preserve" text-anchor="middle" x="508.73" y="-488.2" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a1a1a">Critique roadmap (Codex terra)</text>
 </g>
 <!-- gate&#45;&gt;critique -->
 <g id="edge4" class="edge">
 <title>gate&#45;&gt;critique</title>
-<path fill="none" stroke="#666666" d="M312.63,-557.31C352.72,-544.06 407.79,-525.85 449.2,-512.16"/>
-<polygon fill="#666666" stroke="#666666" points="450.12,-515.54 458.51,-509.08 447.92,-508.89 450.12,-515.54"/>
-<text xml:space="preserve" text-anchor="middle" x="436.1" y="-530.8" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#666666">[A] Approve draft</text>
+<path fill="none" stroke="#666666" d="M312.84,-557.31C353.09,-544.06 408.38,-525.85 449.96,-512.16"/>
+<polygon fill="#666666" stroke="#666666" points="450.92,-515.53 459.32,-509.08 448.73,-508.88 450.92,-515.53"/>
+<text xml:space="preserve" text-anchor="middle" x="436.66" y="-530.8" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#666666">[A] Approve draft</text>
 </g>
 <!-- revise&#45;&gt;gate -->
 <g id="edge6" class="edge">
@@ -108,14 +108,14 @@
 <!-- address -->
 <g id="node8" class="node claude fable plan">
 <title>address</title>
-<ellipse fill="none" stroke="#357f9e" cx="579.73" cy="-418.8" rx="115.44" ry="18"/>
-<text xml:space="preserve" text-anchor="middle" x="579.73" y="-415.2" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a1a1a">Address critique (Claude fable)</text>
+<ellipse fill="none" stroke="#357f9e" cx="580.73" cy="-418.8" rx="115.44" ry="18"/>
+<text xml:space="preserve" text-anchor="middle" x="580.73" y="-415.2" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a1a1a">Address critique (Claude fable)</text>
 </g>
 <!-- critique&#45;&gt;address -->
 <g id="edge7" class="edge">
 <title>critique&#45;&gt;address</title>
-<path fill="none" stroke="#666666" d="M525.16,-473.62C533.85,-465.05 544.53,-454.52 554.13,-445.05"/>
-<polygon fill="#666666" stroke="#666666" points="556.47,-447.66 561.14,-438.14 551.56,-442.67 556.47,-447.66"/>
+<path fill="none" stroke="#666666" d="M526.16,-473.62C534.85,-465.05 545.53,-454.52 555.13,-445.05"/>
+<polygon fill="#666666" stroke="#666666" points="557.47,-447.66 562.14,-438.14 552.56,-442.67 557.47,-447.66"/>
 </g>
 <!-- final -->
 <g id="node9" class="node">
@@ -126,8 +126,8 @@
 <!-- address&#45;&gt;final -->
 <g id="edge8" class="edge">
 <title>address&#45;&gt;final</title>
-<path fill="none" stroke="#666666" d="M585.78,-400.62C588.55,-392.77 591.89,-383.27 594.99,-374.46"/>
-<polygon fill="#666666" stroke="#666666" points="598.21,-375.86 598.23,-365.26 591.61,-373.53 598.21,-375.86"/>
+<path fill="none" stroke="#666666" d="M586.54,-400.62C589.19,-392.77 592.4,-383.27 595.38,-374.46"/>
+<polygon fill="#666666" stroke="#666666" points="598.6,-375.86 598.49,-365.27 591.97,-373.62 598.6,-375.86"/>
 </g>
 <!-- final&#45;&gt;revise -->
 <g id="edge10" class="edge">
