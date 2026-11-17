@@ -6,6 +6,7 @@
 # can be run on its own with `scripts/setup.sh <step>`):
 #
 #   fabro        install Fabro, upgrade to the latest pre-release, run the install wizard
+#   author       commit as git config user.name / user.email ([run.git.author])
 #   litellm      Fabro's LiteLLM provider for Gemini on Vertex AI (default model)
 #   brave        Brave Search API key for Fabro's web search tool
 #   claude       Claude Code subscription token for the Claude Code ACP agent
@@ -33,6 +34,7 @@ keep_secret() { # name; true, with a note, when the vault already holds it
 set_secret() { # name description
   keep_secret "$1" || fabro secret set --no-upgrade-check --description "$2" "$1"
 }
+toml_str() { local s="${1//\\/\\\\}"; printf '"%s"' "${s//\"/\\\"}"; } # TOML basic string
 ensure_toml_block() { # marker, heredoc on stdin
   local marker="$1" body
   body="$(cat)"
@@ -76,6 +78,29 @@ step_fabro() {
     fabro server start --no-upgrade-check >/dev/null 2>&1 || true
   fi
   fabro server status --no-upgrade-check || true
+}
+
+step_author() {
+  bold "Git author for run commits"
+  local name email
+  name="$(git config user.name || true)"; email="$(git config user.email || true)"
+  if [[ -z "$name" || -z "$email" ]]; then
+    note "git config user.name or user.email is unset; Fabro keeps deriving the author from the GitHub credential."
+    return 0
+  fi
+  local had=""; grep -qF "[run.git.author]" "$SETTINGS" 2>/dev/null && had=1
+  ensure_toml_block "[run.git.author]" <<EOF
+# fidfab: commit as the person running setup.sh (git config user.name / user.email)
+# instead of the GitHub token's login and noreply address.
+[run.git.author]
+name = $(toml_str "$name")
+email = $(toml_str "$email")
+EOF
+  # An existing block is kept, so say when git config has changed since it was written.
+  grep -qxF -- "name = $(toml_str "$name")" "$SETTINGS" && grep -qxF -- "email = $(toml_str "$email")" "$SETTINGS" \
+    || note "WARNING: [run.git.author] in $SETTINGS differs from git config; edit it, then fabro server restart."
+  # Restart only for a new block: a no-op re-run should not restart the server under active runs.
+  [[ -n "$had" ]] || fabro server restart --no-upgrade-check >/dev/null 2>&1 || true
 }
 
 # litellm_model_has <model> <capabilities.reasoning_effort|protocol_options.reasoning_effort_levels = true>
@@ -275,10 +300,10 @@ step_doctor() {
 }
 
 steps=("$@")
-[[ ${#steps[@]} -eq 0 ]] && steps=(fabro litellm brave claude codex coderabbit environment doctor)
+[[ ${#steps[@]} -eq 0 ]] && steps=(fabro author litellm brave claude codex coderabbit environment doctor)
 for s in "${steps[@]}"; do
   case "$s" in
-    fabro|litellm|brave|claude|codex|coderabbit|environment|doctor) "step_$s" ;;
+    fabro|author|litellm|brave|claude|codex|coderabbit|environment|doctor) "step_$s" ;;
     -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
     *) echo "unknown step: $s" >&2; exit 64 ;;
   esac
