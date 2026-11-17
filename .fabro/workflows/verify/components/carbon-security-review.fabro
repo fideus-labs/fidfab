@@ -8,10 +8,10 @@ digraph CarbonSecurityReview {
   exit  [shape=Msquare,  label="Exit"]
 
   review  [label="Security review (Gemini 4 Carbon)", class="gemini carbon security",
-           provider="litellm", model="vertex-gemini-4-carbon",
+           provider="litellm", model="vertex-gemini-4-carbon", reasoning_effort="medium",
            prompt="@prompts/security-review-carbon.md"]
   address [label="Verify & address (Claude opus)", class="claude opus verify",
-           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
            prompt="@prompts/address-carbon-security.md"]
   done    [shape=diamond, label="Carbon security review addressed"]
 

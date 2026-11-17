@@ -57,6 +57,13 @@ scripts/setup.sh environment >/dev/null; scripts/setup.sh environment >/dev/null
 n="$(grep -cF '[environments.fidfab]' "$tmp/home/.fabro/settings.toml")"
 if [[ "$n" == 1 ]]; then echo "ok   environment step appends its block once"; else echo "FAIL environment step: $n blocks"; fail=1; fi
 
+# The Gemini catalog rows must declare reasoning_effort, or Fabro drops the medium effort the
+# workflows request. Run before the secret checks below; its own secret call is discarded.
+FIDFAB_LITELLM_DIR="$tmp/nolitellm" scripts/setup.sh litellm >/dev/null 2>&1 </dev/null || true
+n="$(grep -cF 'protocol_options = { reasoning_effort_levels = true }' "$tmp/home/.fabro/settings.toml")"
+if [[ "$n" == 2 ]]; then echo "ok   litellm step declares reasoning effort on both Gemini models"; else echo "FAIL litellm step: $n models declare reasoning effort"; fail=1; fi
+: > "$FIDFAB_TEST_LOG"
+
 FABRO_STUB_SECRETS="BRAVE_SEARCH_API_KEY CLAUDE_CODE_OAUTH_TOKEN" scripts/setup.sh brave claude >/dev/null
 check "secrets already in the vault -> not requested again" ""
 

@@ -5,7 +5,7 @@
 # this file on a developer workstation.
 
 model = "gpt-5.6-luna"
-model_reasoning_effort = "high"
+model_reasoning_effort = "medium"
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
 preferred_auth_method = "chatgpt"

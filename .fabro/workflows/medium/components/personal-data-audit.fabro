@@ -10,10 +10,10 @@ digraph PersonalDataAudit {
            backend="acp", acp.command="fidfab-codex-acp --model luna --effort medium",
            prompt="@prompts/personal-data-decision.md", output_schema="routing"]
   audit   [label="Security audit (Cloudflare skill, Claude opus)", class="claude opus security",
-           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           backend="acp", acp.command="fidfab-claude-acp --model opus --effort high",
            prompt="@prompts/cloudflare-security-audit.md"]
   address [label="Verify & address audit (Claude opus)", class="claude opus verify",
-           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
            prompt="@prompts/address-audit.md"]
   done    [shape=diamond, label="Personal-data check done"]
 

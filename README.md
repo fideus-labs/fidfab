@@ -71,6 +71,19 @@ review stages is `components/prompts/partials/review-priorities.md`. Native node
 explicit model use the `[run.model]` in each `workflow.toml` (`vertex-gemini-3.8-flash` on the
 `litellm` provider); the Carbon review nodes pin `vertex-gemini-4-carbon`.
 
+Every agent stage sets its effort level explicitly, and `tests/test-effort-levels.sh` pins the
+table:
+
+| Stages | Effort |
+|---|---|
+| Claude implementation (`small` and `medium` `implement`) | `xhigh` |
+| Claude and Codex review (CodeRabbit and built-in review, Codex review, Claude review, security review, personal-data security audit, `large` roadmap critique) | `high` |
+| Every other Claude and Codex stage (planning, roadmap drafting, coverage, verify and address, personal-data decision, commit, pull request, steward) | `medium` |
+| Gemini (Carbon reviews, and the `[run.model]` default) | `medium` |
+
+Claude Code and Codex take the level from `--effort` on the node's `acp.command`; Gemini takes
+`reasoning_effort` on the node and `[run.model.controls]` in `workflow.toml`.
+
 ## Workflows
 
 | Workflow | Start | Human gates | Output |

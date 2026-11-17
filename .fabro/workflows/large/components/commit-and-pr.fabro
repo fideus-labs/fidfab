@@ -7,10 +7,10 @@ digraph CommitAndPR {
   exit  [shape=Msquare,  label="Exit"]
 
   commit [label="Commit (Claude opus)", class="claude opus git",
-          backend="acp", acp.command="fidfab-claude-acp --model opus",
+          backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
           prompt="@prompts/commit.md"]
   pr     [label="Pull request (Claude opus)", class="claude opus git",
-          backend="acp", acp.command="fidfab-claude-acp --model opus",
+          backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
           prompt="@prompts/pull-request.md"]
   done   [shape=diamond, label="PR opened"]
 

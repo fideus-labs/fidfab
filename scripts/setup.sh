@@ -93,6 +93,8 @@ step_litellm() {
 # docker/litellm/config.yaml. The workflows select vertex-gemini-3.8-flash in
 # their workflow.toml [run.model]; the Carbon review nodes pin
 # vertex-gemini-4-carbon. ACP stages (Claude Code, Codex) ignore both.
+# The reasoning_effort capability lets the workflows request their effort level (medium);
+# Fabro only sends reasoning_effort to a model whose catalog row declares it.
 [llm.providers.litellm]
 base_url = "http://localhost:$port/v1"
 default_model = "vertex-gemini-3.8-flash"
@@ -102,14 +104,16 @@ enabled = true
 display_name = "Gemini 3.8 Flash (Vertex AI)"
 api_model = "gemini-3.8-flash"
 limits = { context_tokens = 1048576, max_output_tokens = 65536 }
-capabilities = { text = true, tools = true }
+capabilities = { text = true, tools = true, reasoning = true, reasoning_effort = { low = true, medium = true, high = true } }
+protocol_options = { reasoning_effort_levels = true }
 small_default = true
 
 [llm.providers.litellm.models."vertex-gemini-4-carbon"]
 display_name = "Gemini 4 Carbon (Vertex AI)"
 api_model = "gemini-4-carbon"
 limits = { context_tokens = 1048576, max_output_tokens = 65536 }
-capabilities = { text = true, tools = true }
+capabilities = { text = true, tools = true, reasoning = true, reasoning_effort = { low = true, medium = true, high = true } }
+protocol_options = { reasoning_effort_levels = true }
 EOF
   # An existing block is left alone (it may hold the user's own settings), so say what it lacks.
   # shortcut: whole-file literal match, so the same text in a comment or another provider hides
@@ -117,7 +121,8 @@ EOF
   local want
   for want in "base_url = \"http://localhost:$port/v1\"" \
     '[llm.providers.litellm.models."vertex-gemini-3.8-flash"]' \
-    '[llm.providers.litellm.models."vertex-gemini-4-carbon"]'; do
+    '[llm.providers.litellm.models."vertex-gemini-4-carbon"]' \
+    'protocol_options = { reasoning_effort_levels = true }'; do
     grep -qF -- "$want" "$SETTINGS" \
       || note "WARNING: $SETTINGS lacks $want; edit [llm.providers.litellm] to match docs/vertex-ai-litellm.md section 7"
   done

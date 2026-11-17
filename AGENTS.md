@@ -20,6 +20,10 @@ a Docker sandbox image and tests. Keep the following in mind.
 
 - `tests/validate-workflows.sh` must pass after any change to a `.fabro` or `workflow.toml`.
 - `scripts/sync-components.sh --check` must pass.
+- `tests/test-effort-levels.sh` must pass after any change to an agent node. Every Claude Code,
+  Codex and Gemini node sets its effort explicitly: Claude implementation `xhigh`, Claude and
+  Codex review `high`, everything else `medium`. A node that departs from `medium` is listed in
+  that test.
 - `tests/test-bootstrap.sh` must pass after any change to `fidfab-bootstrap`.
 - `tests/test-build.sh` must pass after any change to `docker/build.sh`.
 - `tests/test-pr-steward.sh` must pass after any change to `fidfab-pr-status`,
