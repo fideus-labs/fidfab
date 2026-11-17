@@ -34,6 +34,12 @@ check "regex metachars are literal"     fail 'fidfab-codex-acp --model t.rra'
 check "claude o.us"                     fail 'fidfab-claude-acp --model o.us'
 check "--model= form"                   fail 'fidfab-codex-acp --model=terra'
 check "unknown wrapper"                 fail 'fidfab-nope-acp --model terra'
+check "empty acp.command"               fail ''
+check "whitespace-only acp.command"     fail '   '
+check "path-qualified wrapper"          fail '/usr/local/bin/fidfab-codex-acp --model terra'
+check "path-qualified luna"             fail '/usr/local/bin/fidfab-codex-acp --model luna'
+check "slash inside wrapper name"       fail 'fidfab-../../foo-acp --model terra'
+check "non-fidfab command is ignored"   pass '/usr/bin/other-agent --model whatever'
 if "$repo/tests/check-model-aliases.sh"; then echo "ok   repository workflows"
 else echo "FAIL repository workflows use unknown aliases"; fail=1; fi
 exit $fail

@@ -24,7 +24,16 @@ fail() { echo "$1: $2"; status=1; }
 check() { # <file:line> <command>
   local where="$1" words wrapper i model="" have=0
   read -ra words <<<"$2"
+  (( ${#words[@]} )) || { fail "$where" "empty acp.command"; return; }
   wrapper="${words[0]}"
+  # Workflows call wrappers by bare name (they are on PATH in the image). A path would dodge
+  # the fidfab-*-acp match below, and a `/` inside the name would escape $bin.
+  if [[ "$wrapper" == */* ]]; then
+    if [[ "$wrapper" == *fidfab-* ]]; then
+      fail "$where" "use the bare wrapper name, not the path '$wrapper'"
+    fi
+    return 0
+  fi
   [[ "$wrapper" == fidfab-*-acp ]] || return 0
   [[ -f "$bin/$wrapper" ]] || { fail "$where" "unknown wrapper $wrapper"; return; }
   for ((i = 1; i < ${#words[@]}; i++)); do
