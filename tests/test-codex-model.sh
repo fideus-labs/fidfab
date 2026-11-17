@@ -39,6 +39,14 @@ if [[ "$err" == *"replaced by terra"* ]]; then echo "ok   luna rejection names t
 else echo "FAIL luna rejection message does not mention terra"; fail=1; fi
 expect "--effort is passed through"  '{"model":"gpt-5.6-terra",*"model_reasoning_effort":"xhigh"}' -- --model terra --effort xhigh
 expect "--effort before --model"     '{"model":"gpt-5.6-terra",*"model_reasoning_effort":"low"}'   -- --effort low --model terra
+expect "model with a quote is rejected"  "<exit 64>"   -- --model 'x","sandbox_mode":"read-only'
+expect "model with a backslash is rejected" "<exit 64>" -- --model 'x\\y'
+expect "pinned ID with a quote is rejected" "<exit 64>" 'FIDFAB_MODEL_TERRA=a"b' -- --model terra
+expect "provider/model ID passes"        "$(m openai/gpt-x:1)" -- --model openai/gpt-x:1
+expect "unknown --effort is rejected"   "<exit 64>"    -- --model terra --effort 'high"'
+expect "--model without a value"        "<exit 64>"    -- --model
+expect "--effort without a value"       "<exit 64>"    -- --model terra --effort
+expect "--model with an empty value"    "<exit 64>"    -- --model ''
 
 if grep -qE '^model[[:space:]]*=[[:space:]]*"gpt-5\.6-terra"' "$config"; then echo "ok   $config defaults to gpt-5.6-terra"
 else echo "FAIL $config model is '$(grep -E '^model[[:space:]]*=' "$config" || true)'"; fail=1; fi
