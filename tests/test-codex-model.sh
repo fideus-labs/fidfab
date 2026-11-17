@@ -48,6 +48,6 @@ expect "--model without a value"        "<exit 64>"    -- --model
 expect "--effort without a value"       "<exit 64>"    -- --model terra --effort
 expect "--model with an empty value"    "<exit 64>"    -- --model ''
 
-if grep -qE '^model[[:space:]]*=[[:space:]]*"gpt-5\.6-terra"' "$config"; then echo "ok   $config defaults to gpt-6.1-terra"
+if grep -qE '^model[[:space:]]*=[[:space:]]*"gpt-6\.1-terra"' "$config"; then echo "ok   $config defaults to gpt-6.1-terra"
 else echo "FAIL $config model is '$(grep -E '^model[[:space:]]*=' "$config" || true)'"; fail=1; fi
 exit $fail

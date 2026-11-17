@@ -20,6 +20,7 @@ digraph PersonalDataAudit {
   start  -> decide
   decide -> audit [label="personal-data"]
   decide -> done  [label="no-personal-data"]
+  decide -> audit  // fallback: an unexpected label still gets the audit
   audit  -> address -> done
   done   -> exit
 }

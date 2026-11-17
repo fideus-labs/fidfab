@@ -12,8 +12,9 @@ export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 
 # Alias resolution and the baked config default, checked offline against the installed
 # wrapper and config (CI runs the same test against the repository files).
-# The Dockerfile bakes docker/config/codex-config.toml as $CODEX_HOME/config.toml.
-"$here/test-codex-model.sh" "$(command -v fidfab-codex-acp)" "$CODEX_HOME/config.toml"
+# The Dockerfile bakes docker/config/codex-config.toml at /root/.codex/config.toml; check that
+# file even when CODEX_HOME points elsewhere (CODEX_HOME is only used for auth.json below).
+"$here/test-codex-model.sh" "$(command -v fidfab-codex-acp)" /root/.codex/config.toml
 if [[ -n "${CODEX_AUTH_JSON_B64:-}" && ! -f "$CODEX_HOME/auth.json" ]]; then
   mkdir -p "$CODEX_HOME"; umask 077; printf '%s' "$CODEX_AUTH_JSON_B64" | base64 -d > "$CODEX_HOME/auth.json"
 fi
