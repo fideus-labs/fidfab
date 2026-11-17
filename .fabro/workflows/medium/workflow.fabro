@@ -12,7 +12,7 @@ digraph FidfabMedium {
   bootstrap [import="components/bootstrap.fabro"]
   plan      [import="components/plan-with-files.fabro"]
   implement [label="Implement approved plan (Claude fable)", class="claude fable implement",
-             backend="acp", acp.command="fidfab-claude-acp --model fable",
+             backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
              prompt="@components/prompts/implement-plan.md"]
 
   has_changes [label="Branch has changes?", script="fidfab-diff --has-changes", output_schema="routing"]

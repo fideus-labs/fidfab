@@ -78,6 +78,39 @@ step_fabro() {
   fabro server status --no-upgrade-check || true
 }
 
+# litellm_model_has <model> <capabilities.reasoning_effort|protocol_options.reasoning_effort_levels = true>
+# True when that key is set for [llm.providers.litellm.models."<model>"] of $SETTINGS, in
+# inline-table, dotted or sub-table form (comments ignored). capabilities.reasoning_effort
+# must include medium = true, the level the workflows request.
+# shortcut: line-based, so a table value spread over several lines is not recognised.
+litellm_model_has() {
+  awk -v base="[llm.providers.litellm.models.\"$1\"" -v key="$2" '
+    { line = $0; sub(/#.*/, "", line) }
+    line ~ /^[[:space:]]*\[/ {
+      t = line; gsub(/^[[:space:]]+|[[:space:]]+$/, "", t)
+      in_s = 0; prefix = ""
+      if (t == base "]") in_s = 1
+      else if (index(t, base ".") == 1 && substr(t, length(t)) == "]") {
+        in_s = 1; prefix = substr(t, length(base) + 2); prefix = substr(prefix, 1, length(prefix) - 1) "."
+      }
+      next
+    }
+    !in_s || line !~ /=/ { next }
+    {
+      # <prefix><key>=<value> with all whitespace removed, e.g. capabilities.reasoning_effort={low=true,...}
+      s = prefix line; gsub(/[[:space:]]/, "", s)
+    }
+    key == "capabilities.reasoning_effort" &&
+      (s ~ /^capabilities=\{.*reasoning_effort=\{[^}]*medium=true/ ||
+       s ~ /^capabilities\.reasoning_effort=\{[^}]*medium=true/ ||
+       s ~ /^capabilities\.reasoning_effort\.medium=true/) { found = 1 }
+    key == "protocol_options.reasoning_effort_levels = true" &&
+      (s ~ /^protocol_options=\{.*reasoning_effort_levels=true/ ||
+       s ~ /^protocol_options\.reasoning_effort_levels=true/) { found = 1 }
+    END { exit !found }
+  ' "$SETTINGS" 2>/dev/null
+}
+
 step_litellm() {
   bold "Gemini on Vertex AI through LiteLLM (Fabro default model)"
   local proxy_env="${FIDFAB_LITELLM_DIR:-$HOME/.config/fidfab-litellm}/proxy.env"
@@ -93,6 +126,8 @@ step_litellm() {
 # docker/litellm/config.yaml. The workflows select vertex-gemini-3.8-flash in
 # their workflow.toml [run.model]; the Carbon review nodes pin
 # vertex-gemini-4-carbon. ACP stages (Claude Code, Codex) ignore both.
+# The reasoning_effort capability lets the workflows request their effort level (medium);
+# Fabro only sends reasoning_effort to a model whose catalog row declares it.
 [llm.providers.litellm]
 base_url = "http://localhost:$port/v1"
 default_model = "vertex-gemini-3.8-flash"
@@ -102,24 +137,34 @@ enabled = true
 display_name = "Gemini 3.8 Flash (Vertex AI)"
 api_model = "gemini-3.8-flash"
 limits = { context_tokens = 1048576, max_output_tokens = 65536 }
-capabilities = { text = true, tools = true }
+capabilities = { text = true, tools = true, reasoning = true, reasoning_effort = { low = true, medium = true, high = true } }
+protocol_options = { reasoning_effort_levels = true }
 small_default = true
 
 [llm.providers.litellm.models."vertex-gemini-4-carbon"]
 display_name = "Gemini 4 Carbon (Vertex AI)"
 api_model = "gemini-4-carbon"
 limits = { context_tokens = 1048576, max_output_tokens = 65536 }
-capabilities = { text = true, tools = true }
+capabilities = { text = true, tools = true, reasoning = true, reasoning_effort = { low = true, medium = true, high = true } }
+protocol_options = { reasoning_effort_levels = true }
 EOF
   # An existing block is left alone (it may hold the user's own settings), so say what it lacks.
   # shortcut: whole-file literal match, so the same text in a comment or another provider hides
   # the warning; parse the TOML if settings.toml gains a second localhost provider.
-  local want
+  local want model
   for want in "base_url = \"http://localhost:$port/v1\"" \
     '[llm.providers.litellm.models."vertex-gemini-3.8-flash"]' \
     '[llm.providers.litellm.models."vertex-gemini-4-carbon"]'; do
     grep -qF -- "$want" "$SETTINGS" \
       || note "WARNING: $SETTINGS lacks $want; edit [llm.providers.litellm] to match docs/vertex-ai-litellm.md section 7"
+  done
+  # Fabro sends reasoning_effort only to a model whose own row declares both keys, so check
+  # each Gemini section rather than the whole file.
+  for model in vertex-gemini-3.8-flash vertex-gemini-4-carbon; do
+    for want in 'capabilities.reasoning_effort' 'protocol_options.reasoning_effort_levels = true'; do
+      litellm_model_has "$model" "$want" \
+        || note "WARNING: $SETTINGS [llm.providers.litellm.models.\"$model\"] lacks $want; edit it to match docs/vertex-ai-litellm.md section 7"
+    done
   done
   if grep -q '^\[run\.model\]' "$SETTINGS" 2>/dev/null; then
     note "$SETTINGS has a [run.model] table (from the former DeepSeek step). fabro run does not"
@@ -133,7 +178,6 @@ EOF
     set_secret LITELLM_API_KEY "LiteLLM proxy master key (scripts/litellm-proxy.sh)"
   fi
   fabro server restart --no-upgrade-check >/dev/null 2>&1 || true
-  local model
   for model in vertex-gemini-3.8-flash vertex-gemini-4-carbon; do
     fabro model test --model "$model" --tools --no-upgrade-check \
       || note "$model test failed; check scripts/litellm-proxy.sh status and the proxy logs"

@@ -5,7 +5,7 @@ digraph Coverage {
   exit  [shape=Msquare,  label="Exit"]
 
   coverage [label="Coverage check (Claude opus)", class="claude opus verify",
-            backend="acp", acp.command="fidfab-claude-acp --model opus",
+            backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
             prompt="@prompts/coverage.md"]
   done     [shape=diamond, label="Coverage checked"]
 

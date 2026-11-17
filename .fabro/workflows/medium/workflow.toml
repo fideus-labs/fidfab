@@ -20,6 +20,11 @@ graph = "workflow.fabro"
 name = "vertex-gemini-3.8-flash"
 provider = "litellm"
 
+# Gemini runs at medium reasoning effort; the Carbon review nodes set the same on the node.
+# Claude Code and Codex stages take theirs from --effort on acp.command.
+[run.model.controls]
+reasoning_effort = "medium"
+
 # The goal is the task text; supply it per run with --goal or --goal-file.
 # Everything below is a workflow-owned default; override inputs with -I key=value.
 [run.inputs]

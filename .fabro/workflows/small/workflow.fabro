@@ -13,7 +13,7 @@ digraph FidfabSmall {
 
   bootstrap [import="components/bootstrap.fabro"]
   implement [label="Implement (Claude fable)", class="claude fable implement",
-             backend="acp", acp.command="fidfab-claude-acp --model fable",
+             backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
              prompt="@components/prompts/implement-small.md"]
 
   has_changes [label="Branch has changes?", script="fidfab-diff --has-changes", output_schema="routing"]

@@ -224,14 +224,16 @@ enabled = true
 display_name = "Gemini 3.8 Flash (Vertex AI)"
 api_model = "gemini-3.8-flash"
 limits = { context_tokens = 1048576, max_output_tokens = 65536 }
-capabilities = { text = true, tools = true }
+capabilities = { text = true, tools = true, reasoning = true, reasoning_effort = { low = true, medium = true, high = true } }
+protocol_options = { reasoning_effort_levels = true }
 small_default = true
 
 [llm.providers.litellm.models."vertex-gemini-4-carbon"]
 display_name = "Gemini 4 Carbon (Vertex AI)"
 api_model = "gemini-4-carbon"
 limits = { context_tokens = 1048576, max_output_tokens = 65536 }
-capabilities = { text = true, tools = true }
+capabilities = { text = true, tools = true, reasoning = true, reasoning_effort = { low = true, medium = true, high = true } }
+protocol_options = { reasoning_effort_levels = true }
 ```
 
 then stores the proxy master key as the `LITELLM_API_KEY` vault secret (read from
@@ -249,6 +251,22 @@ Model selection in the workflows:
   `provider="litellm", model="vertex-gemini-4-carbon"` on their review nodes
   ([node attributes](https://docs.fabro.sh/workflows/stages-and-nodes)). The verify-and-address
   passes after them stay on Claude Code (opus).
+- Both Gemini models run at `medium` reasoning effort: `[run.model.controls] reasoning_effort` in
+  each `workflow.toml` for the default, `reasoning_effort="medium"` on the Carbon review nodes.
+  Fabro requests an effort level only from a model whose catalog row declares it, which is what
+  `reasoning_effort` in `capabilities` and `protocol_options` above are for. `setup.sh` leaves an
+  existing `[llm.providers.litellm]` block alone, so add those two keys by hand to a
+  `settings.toml` written before they existed (the step warns for each Gemini model row that lacks
+  either key).
+- Not yet confirmed on a live server: `fabro validate` accepts any `reasoning_effort` value on a
+  node, and Fabro drops the effort without an error if the catalog keys are wrong, so the
+  offline tests cannot show that `medium` reaches Gemini. To confirm, run one Carbon review with
+  the proxy's request logging turned up (LiteLLM debug logging, followed with
+  `scripts/litellm-proxy.sh logs`) and check that the request for `gemini-4-carbon` carries
+  `reasoning_effort: "medium"`. Debug logging records whole request bodies, that is the
+  prompts with the target repository's diffs and source, in the proxy container's Docker log:
+  run the check against a repository without personal data, turn debug logging off afterwards,
+  and recreate the proxy container to drop its logs. Replace this item with the result.
 
 The `base_url` uses `localhost` because the Fabro server runs on the host and makes the model
 calls itself; the sandbox containers never talk to the proxy. If you run the Fabro server in
