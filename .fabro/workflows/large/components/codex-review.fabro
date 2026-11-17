@@ -9,7 +9,7 @@ digraph CodexReview {
            backend="acp", acp.command="fidfab-codex-acp --model luna",
            prompt="@prompts/review-codex.md"]
   address [label="Verify & address (Claude opus)", class="claude opus verify",
-           backend="acp", acp.command="fidfab-claude-acp --model opus",
+           backend="acp", acp.command="fidfab-claude-acp --model opus --effort xhigh",
            prompt="@prompts/address-codex.md"]
   done    [shape=diamond, label="Codex review addressed"]
 

@@ -3,7 +3,8 @@
 #
 # Without credentials only the protocol handshake is checked. With
 # CLAUDE_CODE_OAUTH_TOKEN (or ANTHROPIC_API_KEY) a one-line prompt is sent to
-# the configured "opus" alias and the answer is checked.
+# the configured "opus" alias at xhigh effort (as the Claude and Codex
+# verify-and-address nodes run it) and the answer is checked.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "[claude-acp] adapter: $(command -v claude-agent-acp) ($(claude-agent-acp --version 2>/dev/null || echo '?'))"
@@ -12,6 +13,6 @@ if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}${ANTHROPIC_API_KEY:-}" ]]; then
   echo "[claude-acp] no credentials; handshake only"
   node "$here/acp-smoke.mjs" --handshake-only --timeout 60 -- fidfab-claude-acp --model opus
 else
-  node "$here/acp-smoke.mjs" --timeout 240 -- fidfab-claude-acp --model opus
+  node "$here/acp-smoke.mjs" --timeout 240 -- fidfab-claude-acp --model opus --effort xhigh
 fi
 echo "[claude-acp] OK"

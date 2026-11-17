@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # fidfab-claude-acp — launch Claude Code as an ACP agent for a Fabro stage.
 #
-# Usage: fidfab-claude-acp [--model <alias|id>] [--effort <low|medium|high|max>]
+# Usage: fidfab-claude-acp [--model <alias|id>] [--effort <low|medium|high|xhigh|max>]
 #
 # Model aliases:
 #   opus   -> ${FIDFAB_MODEL_OPUS:-opus}     (deep verification and fixing)

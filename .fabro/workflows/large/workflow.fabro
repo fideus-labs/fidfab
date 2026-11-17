@@ -15,18 +15,18 @@ digraph FidfabLarge {
   bootstrap [import="components/bootstrap.fabro"]
 
   draft    [label="Research & draft roadmap (Claude fable)", class="claude fable plan",
-            backend="acp", acp.command="fidfab-claude-acp --model fable --effort max",
+            backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
             prompt="@components/prompts/roadmap-draft.md"]
   gate     [shape=hexagon, label="Review the roadmap draft. Approve, or type feedback to revise.", max_visits=25]
   revise   [label="Revise roadmap (Claude fable)", class="claude fable plan",
-            backend="acp", acp.command="fidfab-claude-acp --model fable",
+            backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
             prompt="@components/prompts/roadmap-revise.md", max_visits=25]
 
   critique [label="Critique roadmap (Codex luna)", class="codex luna review",
             backend="acp", acp.command="fidfab-codex-acp --model luna --effort xhigh",
             prompt="@components/prompts/roadmap-codex-critique.md"]
   address  [label="Address critique (Claude fable)", class="claude fable plan",
-            backend="acp", acp.command="fidfab-claude-acp --model fable",
+            backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
             prompt="@components/prompts/roadmap-address-critique.md"]
   final    [shape=hexagon, label="Final roadmap review. Approve to commit, or type feedback to revise again.", max_visits=25]
 

@@ -6,12 +6,12 @@ digraph PlanWithFiles {
   exit  [shape=Msquare,  label="Exit"]
 
   plan   [label="Plan with files (Claude fable)", class="claude fable plan",
-          backend="acp", acp.command="fidfab-claude-acp --model fable",
+          backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
           prompt="@prompts/plan-medium.md"]
   gate   [shape=hexagon, label="Review task_plan.md. Approve, or type feedback to revise.",
           max_visits=25]
   revise [label="Revise plan (Claude fable)", class="claude fable plan",
-          backend="acp", acp.command="fidfab-claude-acp --model fable",
+          backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
           prompt="@prompts/plan-revise.md", max_visits=25]
   done   [shape=diamond, label="Plan approved"]
 
