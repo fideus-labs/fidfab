@@ -62,6 +62,17 @@ if [[ "$n" == 1 ]]; then echo "ok   environment step appends its block once"; el
 FIDFAB_LITELLM_DIR="$tmp/nolitellm" scripts/setup.sh litellm >/dev/null 2>&1 </dev/null || true
 n="$(grep -cF 'protocol_options = { reasoning_effort_levels = true }' "$tmp/home/.fabro/settings.toml")"
 if [[ "$n" == 2 ]]; then echo "ok   litellm step declares reasoning effort on both Gemini models"; else echo "FAIL litellm step: $n models declare reasoning effort"; fail=1; fi
+# A block written before the reasoning_effort keys existed is left alone, but the step says so.
+mkdir -p "$tmp/oldhome/.fabro"
+grep -vF 'protocol_options = ' "$tmp/home/.fabro/settings.toml" > "$tmp/oldhome/.fabro/settings.toml"
+out="$(HOME="$tmp/oldhome" FIDFAB_LITELLM_DIR="$tmp/nolitellm" scripts/setup.sh litellm 2>&1 </dev/null || true)"
+n="$(grep -cF 'protocol_options = ' "$tmp/oldhome/.fabro/settings.toml" || true)"
+if [[ "$out" == *"lacks protocol_options = { reasoning_effort_levels = true }"* && "$n" == 0 ]]; then
+  echo "ok   litellm step warns about an existing block without reasoning effort"
+else echo "FAIL litellm step: no warning for an old block (or block rewritten: $n)"; fail=1; fi
+out="$(FIDFAB_LITELLM_DIR="$tmp/nolitellm" scripts/setup.sh litellm 2>&1 </dev/null || true)"
+if [[ "$out" != *WARNING*lacks* ]]; then echo "ok   litellm step is quiet about a current block"
+else echo "FAIL litellm step warns about a current block: $out"; fail=1; fi
 : > "$FIDFAB_TEST_LOG"
 
 FABRO_STUB_SECRETS="BRAVE_SEARCH_API_KEY CLAUDE_CODE_OAUTH_TOKEN" scripts/setup.sh brave claude >/dev/null
