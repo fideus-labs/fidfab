@@ -2,7 +2,10 @@
 # check-model-aliases.sh — every `acp.command="fidfab-<agent>-acp ... --model <alias>"` in the
 # workflows and components must name an alias the wrapper's `case "$model" in ... esac` block
 # resolves. An unknown name is passed to the agent as a literal model ID and the stage fails
-# only at run time. Offline; no fabro needed.
+# only at run time. Literal model IDs are deliberately rejected too, although the wrappers
+# accept them: workflows name aliases, and exact IDs are pinned per run with FIDFAB_MODEL_*
+# in [run.environment.env], so a typo such as `gpt-5.6-tera` cannot slip through.
+# Offline; no fabro needed.
 #
 # Usage: tests/check-model-aliases.sh [repo-root]   (default: this repository)
 set -euo pipefail

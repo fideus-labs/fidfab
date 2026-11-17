@@ -261,6 +261,10 @@ fabro secret set CLAUDE_CODE_OAUTH_TOKEN # paste the sk-ant-oat… token
 `claude-agent-acp` honours Claude Code's environment, so the token and `ANTHROPIC_MODEL`
 select the account and model. Set `FIDFAB_MODEL_OPUS` / `FIDFAB_MODEL_FABLE` in
 `[run.environment.env]` to pin exact model IDs (defaults pass `opus` / `fable` through).
+Workflows name aliases only (`tests/check-model-aliases.sh` rejects literal IDs); the
+Codex `terra` alias is pinned the same way with `FIDFAB_MODEL_TERRA` (default
+`gpt-5.6-terra`). The former `luna` alias was replaced by `terra`: `--model luna` now fails
+with exit 64 and `FIDFAB_MODEL_LUNA` is ignored with a warning.
 
 **OpenAI Codex ACP**
 

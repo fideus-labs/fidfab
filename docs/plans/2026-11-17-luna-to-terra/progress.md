@@ -27,3 +27,14 @@
 | `node --check tests/acp-smoke.mjs` | pass |
 | `tests/validate-workflows.sh` | alias check passes; `fabro validate` not run: `fabro` not installed |
 | `docker/build.sh && tests/test-image.sh` | not run: docker CLI present but no daemon in the sandbox |
+
+## Claude review follow-up
+
+- `fidfab-codex-acp --model luna` now exits 64 with a message pointing to `terra`. A set
+  `FIDFAB_MODEL_LUNA` is ignored with a warning on stderr. The README documents
+  `FIDFAB_MODEL_TERRA`.
+- Using only aliases in workflows (no literal model IDs) is now documented as intended, in
+  `check-model-aliases.sh`, the wrapper usage text, AGENTS.md and the README.
+- The config-default check in `tests/test-codex-model.sh` now tolerates whitespace around `=`.
+- Re-ran `test-codex-model.sh` (12 checks), `test-model-aliases.sh` (14), `test-bootstrap.sh`,
+  `test-pr-steward.sh`, `sync-components.sh --check` and shellcheck: all pass.

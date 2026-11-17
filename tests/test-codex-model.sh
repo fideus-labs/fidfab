@@ -29,10 +29,17 @@ expect "no --model defaults to terra" "$(m gpt-5.6-terra)" --
 expect "FIDFAB_MODEL_TERRA override" "$(m pinned-id)"      FIDFAB_MODEL_TERRA=pinned-id -- --model terra
 expect "empty override falls back"   "$(m gpt-5.6-terra)"  FIDFAB_MODEL_TERRA= -- --model terra
 expect "literal ID passes through"   "$(m other-id)"       -- --model other-id
-expect "luna is no longer an alias"  "$(m luna)"           FIDFAB_MODEL_LUNA=gpt-5.6-luna -- --model luna
+expect "luna is rejected"            "<exit 64>"           -- --model luna
+expect "FIDFAB_MODEL_LUNA is ignored" "$(m gpt-5.6-terra)" FIDFAB_MODEL_LUNA=gpt-5.6-luna -- --model terra
+if (cd "$stub" && env FIDFAB_MODEL_LUNA=x PATH="$stub:$PATH" CODEX_HOME="$stub/home" "$wrapper" 2>&1 >/dev/null) \
+    | grep -q 'FIDFAB_MODEL_LUNA is ignored'; then echo "ok   FIDFAB_MODEL_LUNA warns on stderr"
+else echo "FAIL FIDFAB_MODEL_LUNA set without a warning"; fail=1; fi
+err="$(cd "$stub" && env PATH="$stub:$PATH" CODEX_HOME="$stub/home" "$wrapper" --model luna 2>&1 >/dev/null || true)"
+if [[ "$err" == *"replaced by terra"* ]]; then echo "ok   luna rejection names terra"
+else echo "FAIL luna rejection message does not mention terra"; fail=1; fi
 expect "--effort is passed through"  '{"model":"gpt-5.6-terra",*"model_reasoning_effort":"xhigh"}' -- --model terra --effort xhigh
 expect "--effort before --model"     '{"model":"gpt-5.6-terra",*"model_reasoning_effort":"low"}'   -- --effort low --model terra
 
-if grep -qx 'model = "gpt-5.6-terra"' "$config"; then echo "ok   $config defaults to gpt-5.6-terra"
-else echo "FAIL $config model is '$(grep '^model =' "$config" || true)'"; fail=1; fi
+if grep -qE '^model[[:space:]]*=[[:space:]]*"gpt-5\.6-terra"' "$config"; then echo "ok   $config defaults to gpt-5.6-terra"
+else echo "FAIL $config model is '$(grep -E '^model[[:space:]]*=' "$config" || true)'"; fail=1; fi
 exit $fail

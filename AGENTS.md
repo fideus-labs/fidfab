@@ -31,6 +31,8 @@ a Docker sandbox image and tests. Keep the following in mind.
 - `tests/test-build.sh` must pass after any change to `docker/build.sh`.
 - `tests/test-model-aliases.sh` must pass after any change to a `.fabro`, a `fidfab-*-acp`
   wrapper or `tests/check-model-aliases.sh` (`validate-workflows.sh` runs the check too).
+  Workflows pass model aliases (`--model terra`), never literal IDs; exact IDs are pinned with
+  `FIDFAB_MODEL_*` in `[run.environment.env]`.
 - `tests/test-codex-model.sh` must pass after any change to `fidfab-codex-acp` or
   `docker/config/codex-config.toml`.
 - `tests/test-pr-steward.sh` must pass after any change to `fidfab-pr-status`,
