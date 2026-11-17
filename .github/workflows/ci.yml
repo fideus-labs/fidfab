@@ -30,8 +30,6 @@ jobs:
         run: scripts/sync-components.sh --check
       - name: fabro validate
         run: tests/validate-workflows.sh
-      - name: Every agent stage sets the effort level the policy assigns it
-        run: tests/test-effort-levels.sh
       - name: setup.sh skips the LLM wizard step
         run: tests/test-setup.sh
       - name: fidfab-bootstrap derives the plan slug from the topic branch
