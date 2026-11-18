@@ -84,3 +84,13 @@ permissions = { contents = "write", pull_requests = "write", issues = "write", c
 # fidfab-bootstrap deepens the history and attaches the image's warm caches.
 [run.clone]
 enabled = true
+
+# Fabro commits a checkpoint to fabro/run/<id> after every stage and by default pushes the
+# branch each time, which fills the pull request with `fabro(<id>): <stage> (success)`
+# commits. With push = false the checkpoints stay in the sandbox and only the stages' own
+# pushes reach GitHub: the pull request stage, the steward, and last the history rewrite,
+# which force-pushes the branch as a few logical commits. The cost: `fabro rewind` and
+# `fabro fork` fetch checkpoints from origin and need push = true; `fabro resume` works
+# from the sandbox while it exists.
+[run.run_branch]
+push = false

@@ -1,0 +1,26 @@
+// Component: rewrite-history
+// Runs after the PR steward, once the pull request is green and quiet. Claude (opus)
+// regroups the branch's commits (Fabro's per-stage checkpoint commits, the commit
+// stage's summary, review fixes, the steward's follow-ups) into logically related
+// commits with meaningful messages and force-pushes the pull request branch. The
+// content of the branch does not change.
+//
+// The importing workflow must set `[run.run_branch] push = false` in workflow.toml.
+// Fabro then keeps its checkpoint commits in the sandbox, so only what the stages push
+// reaches GitHub and this rewrite is the last push. With Fabro's own pushes on, the
+// checkpoint commits made after this stage would land on top of the rewritten history.
+//
+// fidelity="truncate" for the same reason as the steward's agents: the default preamble
+// carries the output of earlier stages, which includes review-thread listings a human
+// may have rejected.
+digraph RewriteHistory {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  rewrite [label="Rewrite history (Claude opus)", class="claude opus git",
+           backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
+           prompt="@prompts/rewrite-history.md", fidelity="truncate"]
+  done    [shape=diamond, label="History rewritten"]
+
+  start -> rewrite -> done -> exit
+}

@@ -33,6 +33,11 @@ a Docker sandbox image and tests. Keep the following in mind.
   wrapper or `tests/check-model-aliases.sh` (`validate-workflows.sh` runs the check too).
   Workflows pass model aliases (`--model terra`), never literal IDs; exact IDs are pinned with
   `FIDFAB_MODEL_*` in `[run.environment.env]`.
+- `tests/test-history-rewrite.sh` must pass after any change to a `workflow.fabro`, a
+  `workflow.toml`, `components/rewrite-history.fabro`, its prompt or
+  `tests/check-history-rewrite.sh` (`validate-workflows.sh` runs the check too). In every
+  workflow the history rewrite is the steward's only successor, and
+  `[run.run_branch] push = false` is set.
 - `tests/test-codex-model.sh` must pass after any change to `fidfab-codex-acp` or
   `docker/config/codex-config.toml`.
 - `tests/test-pr-steward.sh` must pass after any change to `fidfab-pr-status`,
@@ -63,6 +68,15 @@ a Docker sandbox image and tests. Keep the following in mind.
 - In the sandbox HEAD is `fabro/run/<id>`. The branch the run started from exists as a local
   branch, but only the HEAD reflog (`checkout: moving from <branch> to fabro/run/<id>`) says
   which one it is; Fabro exports no variable for it.
+- Fabro commits a checkpoint on `fabro/run/<id>` after every node
+  (`fabro(<id>): <node> (<status>)`); it holds whatever the stage left uncommitted. Unless
+  `[run.run_branch] push = false`, Fabro also pushes the branch after each checkpoint, and
+  that branch is the pull request branch. The workflows set it to `false` so that only stage
+  pushes reach GitHub and the history rewrite is the last one; `fabro rewind` and
+  `fabro fork` then cannot fetch checkpoints from origin.
+- An agent node's default preamble (`fidelity="compact"`) includes the scripts earlier stages
+  ran and their output. A node that must not see review-thread listings, such as any agent
+  after `fidfab-pr-status`, sets `fidelity="truncate"` (goal and run id only).
 - `[environments.*]` tables in `workflow.toml` only serve `fabro validate`; they are not sent to
   the server, and `fabro run` ignores `[run.environment] id` (Fabro 0.396). The environment must
   be in the server catalog (`scripts/setup.sh environment`) and selected with

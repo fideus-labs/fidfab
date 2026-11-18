@@ -37,6 +37,7 @@ digraph FidfabLarge {
             backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
             prompt="@components/prompts/pull-request.md"]
   steward  [import="components/pr-steward.fabro"]
+  history  [import="components/rewrite-history.fabro"]
 
   start -> bootstrap -> draft -> gate
   gate   -> critique [label="[A] Approve draft"]
@@ -45,5 +46,5 @@ digraph FidfabLarge {
   critique -> address -> final
   final  -> commit   [label="[A] Approve roadmap"]
   final  -> revise   [freeform=true]
-  commit -> pr -> steward -> exit
+  commit -> pr -> steward -> history -> exit
 }

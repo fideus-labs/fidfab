@@ -2,7 +2,7 @@
 //
 // For work started interactively (for example a Claude Code session in a git
 // worktree): push the branch, then run only the verification pipeline on its
-// diff → PR → steward loop.
+// diff → PR → steward loop → history rewrite into logical commits.
 digraph FidfabVerify {
   graph [max_node_visits=50, stall_timeout="2h", label="fidfab verify"]
 
@@ -22,12 +22,13 @@ digraph FidfabVerify {
   personal   [import="components/personal-data-audit.fabro"]
   ship       [import="components/commit-and-pr.fabro"]
   steward    [import="components/pr-steward.fabro"]
+  history    [import="components/rewrite-history.fabro"]
   done       [shape=diamond, label="Done"]
 
   start -> bootstrap -> has_changes
   has_changes -> coverage [label="has-changes"]
   has_changes -> done     [label="no-changes"]
   coverage -> coderabbit -> codex -> carbon -> claude -> security -> carbon_security
-  carbon_security -> personal -> ship -> steward -> done
+  carbon_security -> personal -> ship -> steward -> history -> done
   done -> exit
 }

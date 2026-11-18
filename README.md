@@ -63,6 +63,9 @@ uses the full local machine.
    waits an hour and repeats until the PR is quiet and green. By default you screen each round
    of review comments before an agent reads them and approve the replies before they are posted
    ([Review comments are untrusted](#review-comments-are-untrusted)).
+6. Once the PR is quiet and green, opus rewrites the branch history into logically related
+   commits with meaningful messages and force-pushes it; the content does not change
+   ([Pull request history](#pull-request-history)).
 
 The models, effort levels, and tools for each step are declared in the DOT graphs under
 `.fabro/workflows/` and the components under `components/`; the prompts are plain Markdown
@@ -81,7 +84,7 @@ against this table, using the role word in each node's `class` (`implement`, `re
 | Claude planning (`medium` plan and its revisions; `large` roadmap draft, its revisions and the response to the critique) | `xhigh` |
 | Verify and address after the Claude review and the Codex review | `xhigh` |
 | Claude and Codex review (CodeRabbit and built-in review, Codex review, Claude review, security review, personal-data security audit, `large` roadmap critique) | `high` |
-| Every other Claude and Codex stage (coverage, verify and address after the other reviews, personal-data decision, commit, pull request, steward) | `medium` |
+| Every other Claude and Codex stage (coverage, verify and address after the other reviews, personal-data decision, commit, pull request, steward, history rewrite) | `medium` |
 | Gemini (Carbon reviews, and the `[run.model]` default) | `medium` |
 
 Claude Code and Codex take the level from `--effort` on the node's `acp.command`; Gemini takes
@@ -97,7 +100,8 @@ Claude Code and Codex take the level from `--effort` on the node's `acp.command`
 | `verify` | Existing branch | steward review screening and reply approval | Verification pipeline only, PR and steward |
 
 The steward gates are on by default and only appear when a PR has review threads awaiting a
-reply; `-I steward_gate=false` turns them off for private repositories.
+reply; `-I steward_gate=false` turns them off for private repositories. Every workflow ends by
+rewriting the PR branch into logical commits ([Pull request history](#pull-request-history)).
 
 Graphs: [small](docs/graphs/small.svg) · [medium](docs/graphs/medium.svg) ·
 [large](docs/graphs/large.svg) · [verify](docs/graphs/verify.svg). Re-render with
@@ -120,6 +124,7 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 | `personal-data-audit.fabro` | Codex decides whether the changes touch potentially personal data; if so runs the [Cloudflare security-audit skill](https://github.com/cloudflare/security-audit-skill) and opus addresses the findings |
 | `commit-and-pr.fabro` | Descriptive commit, `gh pr create --fill`, then title and body rewritten from the diff |
 | `pr-steward.fabro` | Hourly loop: review threads (human-screened, replies approved before posting, unless `steward_gate=false`), conflicts, CI; exits when all clear |
+| `rewrite-history.fabro` | After the steward: opus squashes the branch's logically related commits (Fabro checkpoints, review fixes, steward follow-ups) into a few commits with meaningful messages and force-pushes the PR branch with a lease; the tree stays identical |
 | `plan-with-files.fabro` | planning-with-files draft, human approve/revise loop |
 
 ## Setup
@@ -421,6 +426,35 @@ For a private repository where every commenter is trusted, run with `-I steward_
 (or change the default in your copy of `workflow.toml`). The steward then reads, replies to and
 resolves threads itself, as before.
 
+### Pull request history
+
+Fabro commits a checkpoint to the run branch `fabro/run/<id>` after every stage
+(`fabro(<id>): <stage> (success)`), and that branch is the pull request branch. A checkpoint
+holds whatever its stage left uncommitted, so the checkpoints carry most of the work, in the
+order the run happened to go. Two things turn that into a history worth reading:
+
+- Each `workflow.toml` sets `[run.run_branch] push = false`
+  ([run configuration](https://docs.fabro.sh/execution/run-configuration)). Fabro then keeps
+  the checkpoints in the sandbox, and only the stages' own pushes reach GitHub.
+- After the steward, the last stage (opus) squashes the logically related commits of the
+  branch into a few commits with meaningful messages and force-pushes the pull request
+  branch with `git push --force-with-lease --force-if-includes`, which refuses to overwrite
+  commits someone else pushed in the meantime. It starts from what is on the pull request,
+  keeps the merge base and checks that the tree it pushes is identical to the one the pull
+  request had, so the content that was reviewed and tested does not change. Commits by
+  other people keep their author.
+
+While the run is in progress, the pull request shows the checkpoint commits that the pull
+request stage and the steward pushed along with their own; the rewrite replaces them. The
+force-push starts CI again on the same content, and where branch protection dismisses stale
+approvals it drops the approvals given before it. The steward has finished by then, so
+nothing in the run watches that CI run.
+
+`fabro rewind` and `fabro fork` fetch checkpoints from origin and do not work for runs with
+`push = false`; `fabro resume` does, while the sandbox exists. To keep Fabro's pushes, set
+`push = true` and remove the `history` node from your copy of the workflow: with pushes on,
+the checkpoints made after the rewrite would land on top of it.
+
 ### Interactive Claude Code session first, then the factory
 
 Many tasks start as an exploratory conversation. The sandbox supports both orders:
@@ -467,7 +501,9 @@ digraph Mine {
 ```
 
 `bootstrap.fabro` reads the `plan_slug` input, so the workflow's `[run.inputs]` must define it
-(`plan_slug = "task"`).
+(`plan_slug = "task"`). `rewrite-history.fabro` goes directly after `pr-steward.fabro` and needs
+`[run.run_branch] push = false` in the workflow's `workflow.toml`
+([Pull request history](#pull-request-history)).
 
 **Remote reference**: `fabro run fideus-labs/fidfab@main:medium …` resolves to
 `.fabro/workflows/medium/` in this repository without any local copy.
@@ -513,12 +549,13 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 
 | Test | Where it runs | Checks |
 |---|---|---|
-| `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow |
+| `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow, after the offline lints `tests/check-model-aliases.sh` and `tests/check-history-rewrite.sh` |
 | `scripts/sync-components.sh --check` | host, CI | vendored components match `components/` |
 | `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again; the `author` step writes `git config` identity to `[run.git.author]` once (stubbed `fabro`/`gh`/`claude`/`codex`) |
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert and routes gated runs to the screen; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry (stubbed `gh`) |
+| `tests/test-history-rewrite.sh` | host | `tests/check-history-rewrite.sh`: in every workflow the history rewrite is the steward's only successor and is entered from nowhere else, `[run.run_branch] push = false` is set, the stage runs Claude opus at medium effort with `fidelity="truncate"` and pushes with `--force-with-lease --force-if-includes` (scratch repositories that break one rule each) |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |
 | `tests/test-coderabbit.sh` | image | CLI installed; with `CODERABBIT_API_KEY`, `auth login` and `auth status --agent` succeed |
 | `tests/test-claude-acp.sh` | image | ACP `initialize` handshake; with a token, a full `session/prompt` round-trip returns the expected marker |
@@ -572,6 +609,9 @@ docs/vertex-ai-litellm.md  Google Cloud project, service account, monitoring, an
 - `fabro run` ignores `[run.environment] id` in `workflow.toml` and uses the server's `default`
   environment unless `--environment fidfab` is passed (Fabro 0.396); an unknown id is not an
   error either. `fabro inspect <run>` shows the resolved image under `run.environment.image`.
+- The workflows set `[run.run_branch] push = false`, so a run's checkpoints are not on GitHub
+  and `fabro rewind` and `fabro fork`, which fetch them from origin, are unavailable
+  ([Pull request history](#pull-request-history)).
 - `fabro run` does not send `[run]` settings from `~/.fabro/settings.toml` to the server (Fabro
   0.415 warns about it), so the default model lives in each `workflow.toml` `[run.model]`. Remove
   any `[run.model]` left in `settings.toml` by the former DeepSeek setup step.

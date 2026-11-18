@@ -2,7 +2,7 @@
 //
 // planning-with-files plan (Claude fable) → iterate with the human on
 // task_plan.md → implement the approved plan → verification pipeline →
-// PR → steward loop.
+// PR → steward loop → history rewrite into logical commits.
 digraph FidfabMedium {
   graph [max_node_visits=50, stall_timeout="2h", label="fidfab medium"]
 
@@ -26,12 +26,13 @@ digraph FidfabMedium {
   personal   [import="components/personal-data-audit.fabro"]
   ship       [import="components/commit-and-pr.fabro"]
   steward    [import="components/pr-steward.fabro"]
+  history    [import="components/rewrite-history.fabro"]
   done       [shape=diamond, label="Done"]
 
   start -> bootstrap -> plan -> implement -> has_changes
   has_changes -> coverage [label="has-changes"]
   has_changes -> done     [label="no-changes"]
   coverage -> coderabbit -> codex -> carbon -> claude -> security -> carbon_security
-  carbon_security -> personal -> ship -> steward -> done
+  carbon_security -> personal -> ship -> steward -> history -> done
   done -> exit
 }
