@@ -38,8 +38,9 @@ number="$(jq -r .number <<<"$pr_json")"
 url="$(jq -r .url <<<"$pr_json")"
 mergeable="$(jq -r .mergeable <<<"$pr_json")"          # MERGEABLE | CONFLICTING | UNKNOWN
 checks_total="$(jq '[.statusCheckRollup[]?] | length' <<<"$pr_json")"
-checks_failed="$(jq '[.statusCheckRollup[]? | select((.conclusion // "") as $c | ($c|ascii_upcase) | IN("FAILURE","TIMED_OUT","CANCELLED","ACTION_REQUIRED","STARTUP_FAILURE","ERROR"))] | length' <<<"$pr_json")"
-checks_pending="$(jq '[.statusCheckRollup[]? | select((.status // "COMPLETED") != "COMPLETED" or ((.conclusion // "") == "" and (.state // "") == "PENDING"))] | length' <<<"$pr_json")"
+# Check runs carry status and conclusion; legacy commit statuses (StatusContext) only state.
+checks_failed="$(jq '[.statusCheckRollup[]? | select((.conclusion // .state // "") as $c | ($c|ascii_upcase) | IN("FAILURE","TIMED_OUT","CANCELLED","ACTION_REQUIRED","STARTUP_FAILURE","ERROR"))] | length' <<<"$pr_json")"
+checks_pending="$(jq '[.statusCheckRollup[]? | select((.status // "COMPLETED") != "COMPLETED" or ((.conclusion // "") == "" and ((.state // "")|ascii_upcase|IN("PENDING","EXPECTED"))))] | length' <<<"$pr_json")"
 
 repo="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 owner="${repo%%/*}"; name="${repo##*/}"
