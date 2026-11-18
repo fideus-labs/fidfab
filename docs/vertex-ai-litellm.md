@@ -1,8 +1,15 @@
 # Gemini on Vertex AI through LiteLLM
 
-fidfab's Fabro-native nodes run on **Gemini 3.8 Flash** and its independent code and security
-reviews run on **Gemini 4 Carbon**, both served by Google Cloud Vertex AI. Fabro has no Vertex
-AI provider of its own ([fabro#157](https://github.com/fabro-sh/fabro/issues/157)), so a local
+fidfab's workflows configure **Gemini 3.8 Flash**, served by Google Cloud Vertex AI, as the
+default model for Fabro-native nodes. No stage of a shipped workflow runs on Gemini: every agent
+stage runs Claude Code or Codex over ACP. The Fabro server can still call Flash outside the
+stages, because it is the provider's `small_default` model, which Fabro uses "for metadata tasks
+such as generated run titles" ([Fabro models](https://docs.fabro.sh/core-concepts/models)).
+Keep the proxy running for workflow runs. Not confirmed on a live run: which server-side calls a
+fidfab run makes, and whether a run fails or only loses its generated title when the proxy is
+down. **Gemini 4 Carbon** is registered beside Flash for native nodes that select it; no fidfab
+workflow does. Fabro has no Vertex AI provider of its own
+([fabro#157](https://github.com/fabro-sh/fabro/issues/157)), so a local
 [LiteLLM](https://docs.litellm.ai/) proxy translates Fabro's OpenAI-compatible requests to
 Vertex AI, and Fabro's built-in
 [LiteLLM provider](https://docs.fabro.sh/integrations/litellm) points at it.
@@ -41,8 +48,11 @@ gives no self-service request path, so ask your Google Cloud account team if you
 `scripts/litellm-proxy.sh test` (section 6) is the check, but `gemini-4-carbon: failed` with a
 working `gemini-3.8-flash` only says the request failed. Read the `curl` error above it and
 `scripts/litellm-proxy.sh logs`: a `403` or `404` from Vertex AI naming the model means the
-project lacks access, and the Carbon review stages will fail until it has it; a `429` or a
-network error is something else.
+project lacks access; a `429` or a network error is something else. No fidfab workflow uses
+Gemini 4 Carbon, so the workflows run without that access. Without it, ignore the
+`gemini-4-carbon: failed` line from `scripts/litellm-proxy.sh test` and that command's non-zero
+exit status, and the `vertex-gemini-4-carbon test failed` note from `scripts/setup.sh litellm`,
+as long as Gemini 3.8 Flash passes both checks.
 
 ## 2. A role that can only run inference
 
@@ -159,7 +169,7 @@ key with `gcloud iam service-accounts keys delete KEY_ID --iam-account=...`.
 scripts/litellm-proxy.sh init PROJECT_ID   # writes ~/.config/fidfab-litellm/proxy.env (mode 600)
 scripts/litellm-proxy.sh start
 scripts/litellm-proxy.sh status
-scripts/litellm-proxy.sh test              # gemini-3.8-flash: ready / gemini-4-carbon: ready
+scripts/litellm-proxy.sh test              # gemini-3.8-flash: ready / gemini-4-carbon: ready (or failed without Carbon access, section 1)
 ```
 
 `proxy.env` holds a freshly generated `LITELLM_MASTER_KEY`, `VERTEX_PROJECT`, and
@@ -247,12 +257,11 @@ Model selection in the workflows:
   `litellm`. It has to live there: `fabro run` does not send `[run]` settings from
   `settings.toml` to the server, so remove any `[run.model]` (for example the former DeepSeek
   one) from `settings.toml`.
-- `components/carbon-review.fabro` and `components/carbon-security-review.fabro` set
-  `provider="litellm", model="vertex-gemini-4-carbon"` on their review nodes
-  ([node attributes](https://docs.fabro.sh/workflows/stages-and-nodes)). The verify-and-address
-  passes after them stay on Claude Code (opus).
-- Both Gemini models run at `medium` reasoning effort: `[run.model.controls] reasoning_effort` in
-  each `workflow.toml` for the default, `reasoning_effort="medium"` on the Carbon review nodes.
+- No workflow uses `vertex-gemini-4-carbon`. A native node selects it with
+  `provider="litellm", model="vertex-gemini-4-carbon"`
+  ([node attributes](https://docs.fabro.sh/workflows/stages-and-nodes)).
+- Gemini runs at `medium` reasoning effort: `[run.model.controls] reasoning_effort` in each
+  `workflow.toml` for the default, `reasoning_effort="medium"` on a native node.
   Fabro requests an effort level only from a model whose catalog row declares it, which is what
   `reasoning_effort` in `capabilities` and `protocol_options` above are for. `setup.sh` leaves an
   existing `[llm.providers.litellm]` block alone, so add those two keys by hand to a
@@ -260,9 +269,9 @@ Model selection in the workflows:
   either key).
 - Not yet confirmed on a live server: `fabro validate` accepts any `reasoning_effort` value on a
   node, and Fabro drops the effort without an error if the catalog keys are wrong, so the
-  offline tests cannot show that `medium` reaches Gemini. To confirm, run one Carbon review with
-  the proxy's request logging turned up (LiteLLM debug logging, followed with
-  `scripts/litellm-proxy.sh logs`) and check that the request for `gemini-4-carbon` carries
+  offline tests cannot show that `medium` reaches Gemini. To confirm, run a workflow that has a
+  native node with the proxy's request logging turned up (LiteLLM debug logging, followed with
+  `scripts/litellm-proxy.sh logs`) and check that its request carries
   `reasoning_effort: "medium"`. Debug logging records whole request bodies, that is the
   prompts with the target repository's diffs and source, in the proxy container's Docker log:
   run the check against a repository without personal data, turn debug logging off afterwards,

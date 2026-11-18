@@ -15,12 +15,12 @@ graph = "workflow.fabro"
 # through the local LiteLLM proxy. The model ID is declared by the server's
 # ~/.fabro/settings.toml (`scripts/setup.sh litellm`, README step 2). The
 # Claude Code and Codex stages (backend="acp") use their own subscriptions and
-# ignore this; the Gemini 4 Carbon review nodes pin their model on the node.
+# ignore this.
 [run.model]
 name = "vertex-gemini-3.8-flash"
 provider = "litellm"
 
-# Gemini runs at medium reasoning effort; the Carbon review nodes set the same on the node.
+# Gemini runs at medium reasoning effort.
 # Claude Code and Codex stages take theirs from --effort on acp.command.
 [run.model.controls]
 reasoning_effort = "medium"

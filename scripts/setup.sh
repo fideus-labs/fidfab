@@ -149,8 +149,8 @@ step_litellm() {
 # fidfab: Fabro's built-in LiteLLM provider, pointed at the local proxy
 # (scripts/litellm-proxy.sh). api_model must match model_name in
 # docker/litellm/config.yaml. The workflows select vertex-gemini-3.8-flash in
-# their workflow.toml [run.model]; the Carbon review nodes pin
-# vertex-gemini-4-carbon. ACP stages (Claude Code, Codex) ignore both.
+# their workflow.toml [run.model]; no workflow uses vertex-gemini-4-carbon, which
+# a native node can pin. ACP stages (Claude Code, Codex) ignore both.
 # The reasoning_effort capability lets the workflows request their effort level (medium);
 # Fabro only sends reasoning_effort to a model whose catalog row declares it.
 [llm.providers.litellm]
