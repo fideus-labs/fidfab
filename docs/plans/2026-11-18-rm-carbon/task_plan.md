@@ -49,7 +49,7 @@ dangling references).
 | Decision | Rationale |
 |----------|-----------|
 | Keep `gemini-4-carbon` in the LiteLLM proxy model list, the Fabro catalog block and the setup tests | The task names the review nodes. The model registration is host-side setup that costs nothing per run, and removing it rewrites `setup.sh`, `litellm-proxy.sh` and most of the litellm part of `tests/test-setup.sh`. The docs now say that no workflow uses the model. Left as a follow-up decision; see `findings.md`. |
-| No new test | The change only removes stages. The existing checks cover what could break: `fabro validate` (dangling imports, prompt paths, edges), the sync check, and the effort-level scan (31 agent nodes before, 27 after). Orphaned files were checked by hand; see `progress.md`. |
+| No new test script | The change only removes stages. The existing checks cover what could break: `fabro validate` (dangling imports, prompt paths, edges), the sync check, and the effort-level scan (31 agent nodes before, 27 after). The Carbon stages were the last shipped nodes with a Gemini effort, so `tests/test-effort-levels.sh` gained a `gemok` fixture, a native node with `reasoning_effort="medium"`, to keep that validation exercised. Orphaned files were checked by hand; see `progress.md`. |
 | `.github/workflows/ci.yml` untouched | Nothing in it refers to the Carbon reviews. |
 
 ## Errors Encountered
