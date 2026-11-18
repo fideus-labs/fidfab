@@ -209,8 +209,11 @@ The step adds `[llm.providers.litellm]` with the models `vertex-gemini-3.8-flash
 `fabro model test --model <id> --tools` for both. The workflows choose Gemini 3.8 Flash in their
 `workflow.toml` `[run.model]`. No workflow uses Gemini 4 Carbon; a native node can select it
 with `provider="litellm", model="vertex-gemini-4-carbon"`
-([Fabro stylesheets and node attributes](https://docs.fabro.sh/workflows/stylesheets)). Only
-Fabro-native nodes use these models; the Claude Code and Codex stages use your subscriptions.
+([Fabro stylesheets and node attributes](https://docs.fabro.sh/workflows/stylesheets)). No
+shipped workflow has a Fabro-native node. The Fabro server can still call Gemini 3.8 Flash, the
+provider's `small_default` model, for metadata such as generated run titles
+([Fabro models](https://docs.fabro.sh/core-concepts/models)), so keep the proxy running. The
+Claude Code and Codex stages use your subscriptions.
 
 ### 3. Brave Search
 

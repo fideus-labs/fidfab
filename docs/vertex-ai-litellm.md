@@ -1,9 +1,13 @@
 # Gemini on Vertex AI through LiteLLM
 
 fidfab's workflows configure **Gemini 3.8 Flash**, served by Google Cloud Vertex AI, as the
-default model for Fabro-native nodes. No shipped workflow currently contains a native node: every
-agent stage runs Claude Code or Codex over ACP, so a normal run sends no requests to Gemini.
-**Gemini 4 Carbon** is registered beside Flash for native nodes that select it; no fidfab
+default model for Fabro-native nodes. No stage of a shipped workflow runs on Gemini: every agent
+stage runs Claude Code or Codex over ACP. The Fabro server can still call Flash outside the
+stages, because it is the provider's `small_default` model, which Fabro uses "for metadata tasks
+such as generated run titles" ([Fabro models](https://docs.fabro.sh/core-concepts/models)).
+Keep the proxy running for workflow runs. Not confirmed on a live run: which server-side calls a
+fidfab run makes, and whether a run fails or only loses its generated title when the proxy is
+down. **Gemini 4 Carbon** is registered beside Flash for native nodes that select it; no fidfab
 workflow does. Fabro has no Vertex AI provider of its own
 ([fabro#157](https://github.com/fabro-sh/fabro/issues/157)), so a local
 [LiteLLM](https://docs.litellm.ai/) proxy translates Fabro's OpenAI-compatible requests to
@@ -45,7 +49,10 @@ gives no self-service request path, so ask your Google Cloud account team if you
 working `gemini-3.8-flash` only says the request failed. Read the `curl` error above it and
 `scripts/litellm-proxy.sh logs`: a `403` or `404` from Vertex AI naming the model means the
 project lacks access; a `429` or a network error is something else. No fidfab workflow uses
-Gemini 4 Carbon, so the workflows run without that access.
+Gemini 4 Carbon, so the workflows run without that access. Without it, ignore the
+`gemini-4-carbon: failed` line from `scripts/litellm-proxy.sh test` and that command's non-zero
+exit status, and the `vertex-gemini-4-carbon test failed` note from `scripts/setup.sh litellm`,
+as long as Gemini 3.8 Flash passes both checks.
 
 ## 2. A role that can only run inference
 
@@ -162,7 +169,7 @@ key with `gcloud iam service-accounts keys delete KEY_ID --iam-account=...`.
 scripts/litellm-proxy.sh init PROJECT_ID   # writes ~/.config/fidfab-litellm/proxy.env (mode 600)
 scripts/litellm-proxy.sh start
 scripts/litellm-proxy.sh status
-scripts/litellm-proxy.sh test              # gemini-3.8-flash: ready / gemini-4-carbon: ready
+scripts/litellm-proxy.sh test              # gemini-3.8-flash: ready / gemini-4-carbon: ready (or failed without Carbon access, section 1)
 ```
 
 `proxy.env` holds a freshly generated `LITELLM_MASTER_KEY`, `VERTEX_PROJECT`, and

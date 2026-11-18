@@ -10,7 +10,12 @@
 - The two Carbon `review` nodes were the only Fabro-native agent nodes in the repository. Every
   agent node is now an ACP node (Claude Code or Codex), so no stage of any workflow calls Gemini.
   `[run.model]` still names `vertex-gemini-3.8-flash`, as it named DeepSeek before the Carbon
-  reviews existed. Not checked here: whether a run still needs the LiteLLM proxy to be up.
+  reviews existed. A run can still reach the proxy: per
+  [Fabro models](https://docs.fabro.sh/core-concepts/models), `small_default` "marks the
+  provider's small utility model for metadata tasks such as generated run titles", and the
+  `setup.sh` catalog marks Flash `small_default`. Not checked on a live run: which server-side
+  calls a fidfab run makes, and whether a run fails or only loses its title with the proxy down.
+  The docs therefore say to keep the proxy running.
 - Left in place, for a follow-up decision: `gemini-4-carbon` in `docker/litellm/config.yaml`,
   the `vertex-gemini-4-carbon` catalog row and its checks in `scripts/setup.sh`, the request to
   it in `scripts/litellm-proxy.sh test`, and the cases in `tests/test-setup.sh` that use it as
