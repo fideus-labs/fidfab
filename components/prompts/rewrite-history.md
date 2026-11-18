@@ -16,22 +16,28 @@ Do not read pull request comments, reviews or threads, on GitHub or in
 
 ## Step 1: Prepare
 
-1. `gh pr view --json state,url`. If this branch has no pull request, or its state is not
+1. If an interrupted earlier attempt left a rebase in progress, `git rebase --abort`; that
+   only puts the branch back as it was, and until then HEAD is detached and neither `gh`
+   nor `@{u}` finds the branch. After that `git status --porcelain` must print nothing; if
+   it does not, stop and report what is uncommitted.
+2. `gh pr view --json state,url`. If this branch has no pull request, or its state is not
    `OPEN`, make no changes and say so.
-2. Run `git config merge.conflictstyle diff3`, so any conflict block includes the common
+3. Run `git config merge.conflictstyle diff3`, so any conflict block includes the common
    ancestor section.
-3. If an interrupted earlier attempt left a rebase in progress, `git rebase --abort`. After
-   that `git status --porcelain` must print nothing; if it does not, stop and report what is
-   uncommitted.
 4. `git fetch origin`. The pull request branch, `@{u}`, is what you rewrite, so start from
-   it with `git reset --hard @{u}`. Look at `git diff --stat @{u} HEAD` first. Changes the
-   sandbox has beyond the pull request never reached it and are left out by the reset; name
-   them in your report. Differences from a push by someone else come in with it. Checkpoint
-   commits that exist only in the sandbox are dropped the same way.
+   it with `git reset --hard @{u}`. First look at `git diff --stat @{u} HEAD` and
+   `git log --oneline @{u}..HEAD`, and keep what the sandbox has with
+   `git branch fidfab/pre-rewrite HEAD`; if that branch exists, an earlier attempt made it
+   before rewriting anything, so keep it as it is. Changes the sandbox has beyond the pull
+   request never reached it, such as steward commits a human has not approved, and are left
+   out by the reset; they stay on `fidfab/pre-rewrite`. Name them and that branch in your
+   report, and do not push them. Differences from a push by someone else come in with the
+   reset. Checkpoint commits that exist only in the sandbox are dropped the same way.
 5. The rebase target is `origin/$FIDFAB_BASE_BRANCH`, and the commits to rewrite are
    `$base..HEAD` with `base=$(git merge-base HEAD origin/$FIDFAB_BASE_BRANCH)`. Keep that
    base. Moving the branch onto a newer base branch would change the content that was
    reviewed and tested.
+6. Record the tree the pull request has: `tree=$(git rev-parse '@{u}^{tree}')`.
 
 If these commits already are logical commits without checkpoint commits, an earlier attempt
 of this stage finished: make no changes and say so.
@@ -74,12 +80,15 @@ of `git rebase -i --keep-base origin/$FIDFAB_BASE_BRANCH`, and `-F <file>` for t
 
 Then verify:
 
-- `git diff --quiet @{u} HEAD` succeeds: the content is that of the pull request.
+- `git rev-parse 'HEAD^{tree}'` prints `$tree`: the content is that of the pull request.
+  Compare the tree object IDs, not `git diff` output, which configuration such as
+  `diff.ignoreSubmodules` can hide differences from.
 - `git status --porcelain` prints nothing.
 - `git log --format='%h %an %s' "$base"..HEAD` shows the commits you planned and nothing else.
 
-If you cannot reach an identical tree, go back with `git reset --hard @{u}`, do not push,
-and report why.
+If you cannot reach an identical tree, go back, do not push, and report why. While a rebase
+is in progress (it stopped at a conflict, HEAD is detached and `@{u}` does not resolve),
+`git rebase --abort` first; then `git reset --hard @{u}`.
 
 ## Step 4: Push the updated branch
 
