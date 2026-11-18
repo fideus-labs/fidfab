@@ -100,6 +100,7 @@ digraph T {
   lowrev [backend="acp", acp.command="fidfab-claude-acp --effort medium", class="claude review", prompt="@p.md"]
   norole [backend="acp", acp.command="fidfab-codex-acp --effort medium", prompt="@p.md"]
   gem [class="gemini review", prompt="@p.md"] // reasoning_effort="medium"
+  gemok [class="gemini review", provider="litellm", reasoning_effort="medium", prompt="@p.md"]
   spaced [backend = "acp", acp.command = "fidfab-claude-acp --effort medium", class = "claude review", prompt = "@p.md"]
   // ghost [backend="acp", acp.command="fidfab-claude-acp --effort medium", prompt="@p.md"]
   tool [script="true"]
@@ -115,6 +116,7 @@ ok codex high codex review
 lowrev claude medium claude review
 norole codex medium
 gem gemini - gemini review
+gemok gemini medium gemini review
 spaced claude medium claude review"
 [[ "$got" == "$want" ]] || { echo "FAIL: scanner self-test; got:" >&2; echo "$got" >&2; exit 1; }
 
@@ -155,7 +157,11 @@ for want in "FAIL: lowrev (claude review): effort is 'medium', expected 'high'" 
   "FAIL: spaced (claude review): effort is 'medium', expected 'high'"; do
   grep -qxF -- "$want" <<<"$got" || { echo "FAIL: policy self-test lacks: $want; got:" >&2; echo "$got" >&2; exit 1; }
 done
-grep -q '^FAIL: ok[ :]' <<<"$got" && { echo "FAIL: policy self-test rejected a correct node" >&2; exit 1; }
+# No workflow has a native node with an explicit effort, so the fixture is the only cover
+# for one that sets reasoning_effort="medium" on the node.
+for good in ok gemok; do
+  grep -q "^FAIL: ${good}[ :]" <<<"$got" && { echo "FAIL: policy self-test rejected correct node $good" >&2; exit 1; }
+done
 
 declare -A seen=()
 agents=0
