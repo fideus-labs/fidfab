@@ -51,6 +51,8 @@ setup() {
     cd "$d/work"
     git reset -q --soft origin/main~1
     git commit -qm "Add the feature with its test" -m "Why it is needed."
+    # fidfab-bootstrap records the run branch; .fidfab is git-ignored in a real workspace.
+    mkdir .fidfab; printf 'FIDFAB_BRANCH=topic\n' > .fidfab/run.env; echo .fidfab > .git/info/exclude
   )
 }
 
@@ -141,6 +143,18 @@ EDIT
 check "base from run.env" fail "unusable base branch" <<'EDIT'
 mkdir -p .fidfab; printf 'FIDFAB_BRANCH=topic\nFIDFAB_BASE_BRANCH=topic\n' > .fidfab/run.env; echo .fidfab > .git/info/exclude
 EDIT
+check "no run branch recorded" fail "no run branch recorded" <<<'rm .fidfab/run.env'
+# A replacement object shows the checks the pull request's tree while the push would send the
+# changed commit; the working tree is checked out from the replaced view, so it looks clean.
+check "replacement object hiding changed content" fail "refusing to push" <<'EDIT'
+echo extra >> a; git commit -qam "Add the feature with its test"
+good="$(git commit-tree "origin/topic^{tree}" -p origin/main~1 -m "Add the feature with its test")"
+git replace HEAD "$good"; git reset -q --hard
+EDIT
+check "workspace fsmonitor not run" pass "pushed 1 rewritten commit(s)" <<'EDIT'
+git config core.fsmonitor "touch $ORIGIN/../fsmonitor-ran; false"
+EDIT
+n_fsmon=$n
 check "workspace pre-push hook not run" pass "pushed 1 rewritten commit(s)" <<'EDIT'
 printf '#!/bin/sh\nexit 1\n' > .git/hooks/pre-push; chmod +x .git/hooks/pre-push
 EDIT
@@ -152,4 +166,7 @@ GH_TOKEN=fake FAKE_PR=$'CLOSED\ttopic\tmain' \
 GH_TOKEN=fake FAKE_PR=$'OPEN\tother\tmain' \
   check "pull request of another branch" fail "is not open" <<<':'
 GH_TOKEN=fake FAKE_PR='' check "no pull request" fail "no pull request found" <<<':'
+if [[ -e "$tmp/r$n_fsmon/fsmonitor-ran" ]]; then
+  echo "FAIL workspace fsmonitor not run: the fsmonitor command ran"; fail=1
+fi
 exit $fail

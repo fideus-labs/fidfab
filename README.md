@@ -447,10 +447,12 @@ order the run happened to go. Two things turn that into a history worth reading:
   merge commits, and no checkpoint subject or metadata is left. With a token it also
   requires the branch, which must be the run branch, to be the head of an open pull
   request. The lease is on the exact commit it compared against, so it does not overwrite
-  a push someone made meanwhile. What the pull request merges therefore does not change
-  when the agent errs, or follows an instruction planted in a commit message or file
-  through git (the agent reads text that run agents and anyone with push access wrote, and
-  this push bypasses the steward's reply gate). That check is a guard against mistakes,
+  a push someone made meanwhile. The tree a squash merge produces therefore does not change
+  when the agent errs, or follows an instruction planted in a commit message or file (the
+  agent reads text that run agents and anyone with push access wrote, and this push
+  bypasses the steward's reply gate). Only the tip tree is checked: an intermediate commit
+  that adds content a later commit removes passes, and with merge-commit or rebase merging
+  it reaches the base branch. That check is a guard against mistakes,
   not an isolation boundary: all stages run as root in one sandbox, the run's GitHub token
   (`contents = "write"`) is readable there, and an agent determined to push can do so
   itself, as any agent stage of the run could. Commits by other people keep their author. It runs only if
@@ -461,7 +463,11 @@ order the run happened to go. Two things turn that into a history worth reading:
   as it is.
 
 While the run is in progress, the pull request shows the checkpoint commits that the pull
-request stage and the steward pushed along with their own; the rewrite replaces them. The
+request stage and the steward pushed along with their own; the rewrite takes them off the
+branch, but does not delete them. GitHub keeps commits once pushed reachable by SHA and in
+the pull request's force-push timeline, with their author name and email, the `Fabro-*` run
+metadata and their interim content, so do not rely on the rewrite to remove personal or
+other data that has already been pushed. The
 force-push starts CI again on the same content, and where branch protection dismisses stale
 approvals it drops the approvals given before it. Every rewritten commit is re-created with
 the run's identity as committer, so GPG or SSH signatures on commits are dropped; where
