@@ -14,16 +14,21 @@
 // and reaches the base branch with merge-commit or rebase merging. It is not a hard boundary: every
 // stage runs as root in one sandbox, and the run's GitHub token can be read there (the
 // sandbox driver passes it on its command line), so an agent set on it can push past the
-// check. A failed push skips to done.
+// check. A failed push skips to done. A failed rewrite stage ends the run there
+// (on_failure="exit") and push does not run: Fabro's default routing would take the
+// unconditional rewrite -> push edge after a failure too, and fidfab-rewrite-push cannot tell
+// a partial regrouping with the same tree from a finished one.
 //
 // The steward also ends when there is no pull request and when a reply preview fails,
 // which leaves threads awaiting replies. check asks fidfab-pr-status again and the
 // rewrite runs only on "done": the pull request is open, green and quiet, the condition
 // the steward loops for. Anything else, a failed check included, skips it. Only the
 // routing line of the output is kept: the listing before it can quote review threads.
+// The labelled check -> rewrite edge is also a candidate when no label matches; Fabro then
+// picks among the edges without a condition by target ID, and done sorts before rewrite.
 //
 // The importing workflow must set `[run.run_branch] push = false` in workflow.toml.
-// Fabro then keeps its checkpoint commits in the sandbox, so only what the stages push
+// Fabro then does not push its checkpoint commits itself, so only what the stages push
 // reaches GitHub and this rewrite is the last push. With Fabro's own pushes on, the
 // checkpoint commits made after this stage would land on top of the rewritten history.
 //
@@ -38,7 +43,7 @@ digraph RewriteHistory {
            output_schema="routing", retry_policy="linear"]
   rewrite [label="Rewrite history (Claude opus)", class="claude opus git",
            backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
-           prompt="@prompts/rewrite-history.md", fidelity="truncate"]
+           prompt="@prompts/rewrite-history.md", fidelity="truncate", on_failure="exit"]
   push    [label="Push if tree unchanged", script="fidfab-rewrite-push"]
   done    [shape=diamond, label="History rewritten or skipped"]
 
