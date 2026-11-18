@@ -11,8 +11,9 @@
 #     workflow.toml. Otherwise Fabro pushes its checkpoint commits, the ones made after the
 #     rewrite included, on top of the rewritten history.
 # The component's one agent node is Claude opus at medium effort with fidelity="truncate"
-# (earlier stage output, such as review-thread listings, stays out of its preamble), is
-# entered only through the "done" edge of a script node that runs fidfab-pr-status (the
+# (earlier stage output, such as review-thread listings, stays out of its preamble) and
+# on_failure="exit" (a failed rewrite does not reach the push), is entered only through
+# "done" edges, without a condition, of a script node that runs fidfab-pr-status (the
 # steward also ends with no pull request and after a failed reply preview; the rewrite
 # runs only once the pull request is green and quiet), and does not push: its only
 # successor is a script node running fidfab-rewrite-push, which pushes only an unchanged
@@ -83,24 +84,28 @@ edges() {
   ' "$1"
 }
 
-# edge_labels <dot file> <from> <to>: "label=<its label>" for every edge statement
-# "<from> -> <to> [...]", one line each ("label=" for an edge without one, a line that
-# command substitution does not drop).
-# shortcut: an edge in a chain (a -> b -> c) is not matched, so a lint that needs every edge
-# into a node to carry a label fails on a chain rather than passing it.
+# edge_labels <dot file> <from> <to>: one line for every edge "<from> -> <to>": "label=<its
+# label>" ("label=" for an edge without one, a line that command substitution does not drop),
+# and "condition=<it>" as well when the edge has a condition. An edge in a chain
+# (a -> b -> c) gives "chain=" instead of its label, so a lint that needs every edge into a
+# node to carry a label fails on a chain rather than passing it.
 edge_labels() {
   awk -v from="$2" -v to="$3" "$awk_code"'
     { s = code($0); u = unquoted(s) }
     u ~ /->/ {
       gsub(/\[[^]]*\]/, "", u)
-      if (split(u, part, /->/) != 2) next
-      for (i = 1; i <= 2; i++) gsub(/[[:space:];]/, "", part[i])
-      if (part[1] != from || part[2] != to) next
-      label = ""
-      if (match(s, /[[:space:],[]label="[^"]*"/)) {
-        label = substr(s, RSTART + 1, RLENGTH - 1); sub(/^label="/, "", label); sub(/"$/, "", label)
+      n = split(u, part, /->/)
+      for (i = 1; i <= n; i++) gsub(/[[:space:];]/, "", part[i])
+      for (i = 1; i < n; i++) {
+        if (part[i] != from || part[i + 1] != to) continue
+        if (n > 2) { print "chain="; continue }
+        label = ""
+        if (match(s, /[[:space:],[]label="[^"]*"/)) {
+          label = substr(s, RSTART + 1, RLENGTH - 1); sub(/^label="/, "", label); sub(/"$/, "", label)
+        }
+        print "label=" label
+        if (match(s, /[[:space:],[]condition="[^"]*"/)) print substr(s, RSTART + 1, RLENGTH - 1)
       }
-      print "label=" label
     }
   ' "$1"
 }
@@ -122,6 +127,9 @@ status=0
 # script="..." as an attribute of its own: the command is BASH_REMATCH[2], and the match
 # does not run across a closing quote into another attribute (label="fidfab-pr-status").
 script_re='(^|[[:space:],[])script="([^"]*)"'
+# The commands the gate and the push node may run, whole: a script that only names them
+# (echo fidfab-pr-status) does not pass.
+gate_re="^(fidfab-pr-status|bash -o pipefail -c 'fidfab-pr-status \\| tail -n 1')\$"
 fail() { echo "$1: $2"; status=1; }
 
 seen_rewrite=0
@@ -164,6 +172,9 @@ if [[ -f "$rewrite" ]]; then
       || fail "$rewrite" "'$node' must run 'fidfab-claude-acp --model opus --effort medium' over ACP"
     [[ "$agents" == *'fidelity="truncate"'* ]] \
       || fail "$rewrite" "'$node' must set fidelity=\"truncate\": the default preamble carries earlier stage output"
+    # Fabro's default routing takes the unconditional edge to the push after a failure too.
+    [[ "$agents" == *'on_failure="exit"'* ]] \
+      || fail "$rewrite" "'$node' must set on_failure=\"exit\": a failed rewrite must not reach the push"
     # The steward also ends with no pull request and after a failed reply preview, threads
     # still awaiting replies; fidfab-pr-status says "done" only when the PR is green and quiet.
     prev="$(edges "$rewrite" | awk -v n="$node" '$2 == n { print $1 }' | sort -u)"
@@ -171,7 +182,7 @@ if [[ -f "$rewrite" ]]; then
     for p in $prev; do
       gate="$(nodes "$rewrite" | awk -v n="$p" '$1 == n')"
       labels="$(edge_labels "$rewrite" "$p" "$node")"
-      if ! [[ "$gate" =~ $script_re && "${BASH_REMATCH[2]}" == *fidfab-pr-status* ]] \
+      if ! [[ "$gate" =~ $script_re && "${BASH_REMATCH[2]}" =~ $gate_re ]] \
         || [[ -z "$labels" ]] || grep -qvx label=done <<<"$labels"; then
         fail "$rewrite" "'$node' must be entered only through the \"done\" edge of a script node running fidfab-pr-status, not from '$p'"
       elif [[ "$gate" != *'output_schema="routing"'* ]]; then
@@ -183,7 +194,7 @@ if [[ -f "$rewrite" ]]; then
     next="$(edges "$rewrite" | awk -v n="$node" '$1 == n { print $2 }' | sort -u)"
     pusher="$(nodes "$rewrite" | awk -v n="$next" '$1 == n')"
     if [[ "$(grep -c . <<<"$next")" != 1 ]] \
-      || ! [[ "$pusher" =~ $script_re && "${BASH_REMATCH[2]}" == *fidfab-rewrite-push* ]]; then
+      || ! [[ "$pusher" =~ $script_re && "${BASH_REMATCH[2]}" == fidfab-rewrite-push ]]; then
       fail "$rewrite" "'$node' must be followed by a script node running fidfab-rewrite-push and nothing else (followed by: $(echo ${next:-nothing}))"
     else
       for p in $(edges "$rewrite" | awk -v n="$next" '$2 == n { print $1 }' | sort -u); do

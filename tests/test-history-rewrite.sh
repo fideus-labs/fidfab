@@ -17,7 +17,7 @@ digraph RewriteHistory {
   check [script="bash -o pipefail -c 'fidfab-pr-status | tail -n 1'", output_schema="routing"]
   rewrite [label="Rewrite history", class="claude opus git",
            backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
-           prompt="@prompts/rewrite-history.md", fidelity="truncate"]
+           prompt="@prompts/rewrite-history.md", fidelity="truncate", on_failure="exit"]
   push [script="fidfab-rewrite-push"]
   done [shape=diamond]
   start -> check
@@ -122,8 +122,9 @@ check "fable instead of opus" fail "must run 'fidfab-claude-acp --model opus --e
 check "high effort" fail "must run 'fidfab-claude-acp --model opus --effort medium'" <<<'perl -pi -e "s|--effort medium|--effort high|" $comp'
 check "Codex instead of Claude" fail "must run 'fidfab-claude-acp --model opus --effort medium'" <<<'perl -pi -e "s|fidfab-claude-acp --model opus|fidfab-codex-acp --model terra|" $comp'
 check "default fidelity" fail 'must set fidelity="truncate"' <<<'perl -pi -e "s|, fidelity=\"truncate\"||" $comp'
-check "fidelity only in a comment" fail 'must set fidelity="truncate"' <<<'perl -pi -e "s|, fidelity=\"truncate\"\]|]  // fidelity=\"truncate\"|" $comp'
+check "fidelity only in a comment" fail 'must set fidelity="truncate"' <<<'perl -pi -e "s|, fidelity=\"truncate\", on_failure=\"exit\"\]|, on_failure=\"exit\"]  // fidelity=\"truncate\"|" $comp'
 check "two agent nodes" fail "expected exactly one agent node" <<<'perl -pi -e "s|^  done \[shape=diamond\]|  extra [backend=\"acp\", acp.command=\"fidfab-claude-acp --model opus --effort medium\", prompt=\"\@prompts/rewrite-history.md\"]\n\$&|" $comp'
+check "no on_failure on the rewrite" fail 'must set on_failure="exit"' <<<'perl -pi -e "s|, on_failure=\"exit\"||" $comp'
 check "gate edge with spaces around =" pass <<<'perl -pi -e "s|\[label=\"done\"\]|[ label = \"done\" ]|" $comp'
 check "rewrite entered from start, no gate" fail "not from 'start'" <<<'perl -pi -e "s|^  start -> check|  start -> rewrite|" $comp'
 check "gate edge without a label" fail "not from 'check'" <<<'perl -pi -e "s|check -> rewrite \[label=\"done\"\]|check -> rewrite|" $comp'
@@ -132,6 +133,11 @@ check "gate's fallback also to the rewrite" fail "not from 'check'" <<<'perl -pi
 check "gate edge in a chain" fail "not from 'check'" <<'EDIT'
 perl -pi -e '$_ = "" if /^  check -> rewrite/; s|^  start -> check|  start -> check -> rewrite [label="done"]|' $comp
 EDIT
+check "done edge and a chain into the rewrite" fail "not from 'check'" <<<'perl -pi -e "s|^  check -> done\$|  check -> rewrite -> push|" $comp'
+check "done edge with a condition" fail "not from 'check'" <<<'perl -pi -e "s|\[label=\"done\"\]|[label=\"done\", condition=\"outcome=failed\"]|" $comp'
+check "gate that only echoes fidfab-pr-status" fail "not from 'check'" <<<'perl -pi -e "s|script=\"bash -o pipefail -c .fidfab-pr-status \| tail -n 1.\"|script=\"echo fidfab-pr-status\"|" $comp'
+check "plain fidfab-pr-status gate" pass <<<'perl -pi -e "s|script=\"bash -o pipefail -c .fidfab-pr-status \| tail -n 1.\"|script=\"fidfab-pr-status\"|" $comp'
+check "push node that only echoes fidfab-rewrite-push" fail "must be followed by a script node running fidfab-rewrite-push" <<<'perl -pi -e "s|script=\"fidfab-rewrite-push\"|script=\"echo fidfab-rewrite-push\"|" $comp'
 check "gate that is not fidfab-pr-status" fail "not from 'check'" <<<'perl -pi -e "s|fidfab-pr-status \| tail -n 1|true|" $comp'
 check "fidfab-pr-status only in a comment" fail "not from 'check'" <<<'perl -pi -e "s|fidfab-pr-status \| tail -n 1|true|; s|^  check -> done|  check -> done  // script=\"fidfab-pr-status\"|" $comp'
 check "rewrite not reached" fail "'rewrite' is not reached" <<<'perl -pi -e "\$_ = \"\" if /^  check -> rewrite/; s|^  rewrite -> push|  start -> push|" $comp'
@@ -153,7 +159,8 @@ if "$repo/tests/check-history-rewrite.sh"; then echo "ok   repository workflows"
 else echo "FAIL repository workflows"; fail=1; fi
 # Every workflow in this repository has a steward, so each one must carry the rewrite.
 for wf in .fabro/workflows/*/workflow.fabro; do
-  if grep -q 'import="components/rewrite-history.fabro"' "$wf"; then echo "ok   $wf imports the rewrite"
+  # Either spelling the lint accepts (spaces around "="), outside // comments.
+  if sed 's|//.*||' "$wf" | grep -qE 'import[[:space:]]*=[[:space:]]*"components/rewrite-history\.fabro"'; then echo "ok   $wf imports the rewrite"
   else echo "FAIL $wf does not import components/rewrite-history.fabro"; fail=1; fi
 done
 exit $fail
