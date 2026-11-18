@@ -12,9 +12,8 @@ pixi and Rust toolchains, every step recorded in the Fabro run log).
 Everything runs on your workstation: a local Fabro server, local Docker containers, and
 leading models through your own Claude Code and Codex subscriptions over the
 [Agent Client Protocol](https://agentclientprotocol.com) (ACP). Fabro-native steps default to
-Gemini 3.8 Flash on Google Cloud Vertex AI, reached through a local LiteLLM proxy, and Gemini 4
-Carbon adds independent code and security reviews. The compute-heavy work (compilation, tests)
-uses the full local machine.
+Gemini 3.8 Flash on Google Cloud Vertex AI, reached through a local LiteLLM proxy. The
+compute-heavy work (compilation, tests) uses the full local machine.
 
 <p align="center">
   <img src="docs/graphs/medium.svg" alt="fidfab medium workflow graph" width="320">
@@ -54,8 +53,8 @@ uses the full local machine.
 2. Claude Code implements the approved plan in the sandbox.
 3. The verification pipeline runs over the diff: coverage of uncovered behaviour (opus),
    CodeRabbit review and autonomous fix (opus, with a 3-minute retry and a fallback to Claude's
-   built-in review), Codex (terra) review, Gemini 4 Carbon review, Claude (fable) review, a
-   security review, a second Gemini 4 Carbon security review, a personal-data decision with an optional Cloudflare security audit, each followed by an
+   built-in review), Codex (terra) review, Claude (fable) review, a security review, a
+   personal-data decision with an optional Cloudflare security audit, each followed by an
    opus "verify and address" pass that writes a Markdown record of the approach taken per finding.
 4. opus writes the commit, opens the PR with `gh pr create --fill`, then rewrites the title and
    body from the actual diff and task context.
@@ -70,10 +69,10 @@ uses the full local machine.
 
 The models, effort levels, and tools for each step are declared in the DOT graphs under
 `.fabro/workflows/` and the components under `components/`; the prompts are plain Markdown
-under `components/prompts/`. The review prompt used by the Codex, Gemini 4 Carbon, and Claude
-review stages is `components/prompts/partials/review-priorities.md`. Native nodes without an
-explicit model use the `[run.model]` in each `workflow.toml` (`vertex-gemini-3.8-flash` on the
-`litellm` provider); the Carbon review nodes pin `vertex-gemini-4-carbon`.
+under `components/prompts/`. The review prompt used by both the Codex and Claude review stages
+is `components/prompts/partials/review-priorities.md`. Native nodes without an explicit model
+use the `[run.model]` in each `workflow.toml` (`vertex-gemini-3.8-flash` on the `litellm`
+provider).
 
 Every agent stage sets its effort level explicitly, and `tests/test-effort-levels.sh` checks it
 against this table, using the role word in each node's `class` (`implement`, `review`,
@@ -86,7 +85,7 @@ against this table, using the role word in each node's `class` (`implement`, `re
 | Verify and address after the Claude review and the Codex review | `xhigh` |
 | Claude and Codex review (CodeRabbit and built-in review, Codex review, Claude review, security review, personal-data security audit, `large` roadmap critique) | `high` |
 | Every other Claude and Codex stage (coverage, verify and address after the other reviews, personal-data decision, commit, pull request, steward, history rewrite) | `medium` |
-| Gemini (Carbon reviews, and the `[run.model]` default) | `medium` |
+| Gemini (the `[run.model]` default, and any native node) | `medium` |
 
 Claude Code and Codex take the level from `--effort` on the node's `acp.command`; Gemini takes
 `reasoning_effort` on the node and `[run.model.controls]` in `workflow.toml`.
@@ -117,10 +116,8 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 | `coverage.fabro` | opus checks the diff for uncovered behaviour and adds tests |
 | `coderabbit-review.fabro` | `coderabbit review --agent`; if unavailable, waits 3 minutes and retries, then falls back to Claude's built-in code review; opus fixes issues following section "4. Fix Issues (Autonomous Workflow)" of the [CodeRabbit code-review skill](https://github.com/coderabbitai/skills) |
 | `codex-review.fabro` | Codex (terra) review with the prioritised review prompt, then opus verifies and addresses, writing `docs/plans/<slug>/review-codex.md` |
-| `carbon-review.fabro` | Independent Gemini 4 Carbon review (Fabro-native, through LiteLLM) with the same review priorities, then opus verifies and addresses, writing `.fidfab/reviews/carbon-review-response.md` |
 | `claude-review.fabro` | Same review by Claude (fable), then opus verifies and addresses |
 | `security-review.fabro` | opus security review of the changes, then verify and address |
-| `carbon-security-review.fabro` | Independent second security review by Gemini 4 Carbon, then opus verifies and addresses, writing `.fidfab/reviews/carbon-security-review-response.md` |
 | `personal-data-audit.fabro` | Codex decides whether the changes touch potentially personal data; if so runs the [Cloudflare security-audit skill](https://github.com/cloudflare/security-audit-skill) and opus addresses the findings |
 | `commit-and-pr.fabro` | Descriptive commit, `gh pr create --fill`, then title and body rewritten from the diff |
 | `pr-steward.fabro` | Hourly loop: review threads (human-screened, replies approved before posting, unless `steward_gate=false`), conflicts, CI; exits when all clear |
@@ -210,8 +207,8 @@ The step adds `[llm.providers.litellm]` with the models `vertex-gemini-3.8-flash
 `vertex-gemini-4-carbon` to `~/.fabro/settings.toml`, stores the proxy master key as the
 `LITELLM_API_KEY` vault secret, restarts the server, and runs
 `fabro model test --model <id> --tools` for both. The workflows choose Gemini 3.8 Flash in their
-`workflow.toml` `[run.model]`, and the Carbon review components set
-`provider="litellm", model="vertex-gemini-4-carbon"` on their review nodes
+`workflow.toml` `[run.model]`. No workflow uses Gemini 4 Carbon; a native node can select it
+with `provider="litellm", model="vertex-gemini-4-carbon"`
 ([Fabro stylesheets and node attributes](https://docs.fabro.sh/workflows/stylesheets)). Only
 Fabro-native nodes use these models; the Claude Code and Codex stages use your subscriptions.
 
@@ -649,9 +646,6 @@ docs/vertex-ai-litellm.md  Google Cloud project, service account, monitoring, an
   any `[run.model]` left in `settings.toml` by the former DeepSeek setup step.
 - If the install wizard set up OpenAI via Codex device login, that ChatGPT-subscription OpenAI
   credential stays unused; the workflows select the `litellm` provider explicitly.
-- The Gemini 4 Carbon review nodes are Fabro-native agents: Fabro runs their tool loop on the
-  host server and their tools in the sandbox with full permissions, like the other native nodes.
-  Their prompts tell them to write only the review file.
 - Vertex AI Standard pay-as-you-go capacity is shared; bursts can return `429`. LiteLLM retries,
   and Fabro retries the stage; a budget alert in Google Cloud Billing notifies but does not cap spend.
 - Subscription credentials (Claude Code OAuth token, Codex `auth.json`) expire and rotate;
