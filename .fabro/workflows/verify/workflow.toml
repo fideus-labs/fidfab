@@ -87,9 +87,10 @@ enabled = true
 
 # Fabro commits a checkpoint to fabro/run/<id> after every stage and by default pushes the
 # branch each time, which fills the pull request with `fabro(<id>): <stage> (success)`
-# commits. With push = false the checkpoints stay in the sandbox and only the stages' own
-# pushes reach GitHub: the pull request stage, the steward, and last the history rewrite,
-# which force-pushes the branch as a few logical commits. The cost: `fabro rewind` and
+# commits. push = false turns off these automatic pushes, so only the stages' own pushes
+# reach GitHub: the pull request stage, the steward, and last the history rewrite. The first
+# two still publish the checkpoints made before them, as ancestors of what they push; the
+# rewrite force-pushes the branch as a few logical commits without them. The cost: `fabro rewind` and
 # `fabro fork` fetch checkpoints from origin and need push = true, and work that no stage
 # has pushed yet exists only in the sandbox, which the fidfab environment does not
 # preserve. A run that fails before the pull request stage leaves nothing on GitHub; pass

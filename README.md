@@ -472,7 +472,8 @@ force-push starts CI again on the same content, and where branch protection dism
 approvals it drops the approvals given before it. Every rewritten commit is re-created with
 the run's identity as committer, so GPG or SSH signatures on commits are dropped; where
 branch protection requires signed commits, remove the `history` node from your copy of the
-workflow. The steward has finished by then, so nothing in the run watches that CI run.
+workflow and connect the steward to what followed it: `steward -> history -> done` becomes
+`steward -> done` (`steward -> history -> exit` becomes `steward -> exit` in the large one). The steward has finished by then, so nothing in the run watches that CI run.
 
 `fabro rewind` and `fabro fork` fetch checkpoints from origin and do not work for runs with
 `push = false`. `fabro resume` works from the run's sandbox, and the `fidfab` environment does
@@ -483,7 +484,8 @@ and nothing to resume once its sandbox is gone; `fabro retry` starts it again fr
 beginning. For long runs, pass `--preserve-sandbox` to `fabro run`: the sandbox is kept for
 `fabro resume` and `fabro sandbox ssh`, and you remove its container (`docker ps -a`) when
 you are done. To keep Fabro's pushes instead, set `push = true` and remove the `history` node
-from your copy of the workflow: with pushes on, the checkpoints made after the rewrite would
+from your copy of the workflow, and replace `steward -> history -> done` with
+`steward -> done` (`steward -> exit` in the large one): with pushes on, the checkpoints made after the rewrite would
 land on top of it.
 
 ### Interactive Claude Code session first, then the factory
@@ -641,8 +643,9 @@ docs/vertex-ai-litellm.md  Google Cloud project, service account, monitoring, an
 - `fabro run` ignores `[run.environment] id` in `workflow.toml` and uses the server's `default`
   environment unless `--environment fidfab` is passed (Fabro 0.396); an unknown id is not an
   error either. `fabro inspect <run>` shows the resolved image under `run.environment.image`.
-- The workflows set `[run.run_branch] push = false`, so a run's checkpoints are not on GitHub
-  and `fabro rewind` and `fabro fork`, which fetch them from origin, are unavailable. Work
+- The workflows set `[run.run_branch] push = false`, so Fabro does not push checkpoints
+  automatically and `fabro rewind` and `fabro fork`, which fetch them from origin, are
+  unavailable. Work
   that no stage has pushed yet lives only in the sandbox; use `--preserve-sandbox` for long
   runs ([Pull request history](#pull-request-history)).
 - `fabro run` does not send `[run]` settings from `~/.fabro/settings.toml` to the server (Fabro

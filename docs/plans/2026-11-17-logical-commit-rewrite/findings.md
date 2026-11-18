@@ -35,7 +35,7 @@
   their output, so an agent after the steward would be shown `fidfab-pr-status` listings,
   including ones a human rejected. `truncate` passes "only the goal and run ID"; the rewrite
   node uses it, as the steward's agents do.
-- The rewrite keeps the merge base (`git rebase -i --keep-base`, or `git reset --soft` to the
+- The rewrite keeps the merge base (`git rebase -i --keep-base`, or `git reset --mixed` to the
   merge base) instead of moving onto the tip of the base branch, so the tree stays identical
   to what was reviewed and tested.
 - The stage starts from the pull request branch (`git fetch`, `git reset --hard @{u}`), not
@@ -46,8 +46,14 @@
   before the push.
 - After a `git fetch`, `git push --force-with-lease` alone overwrites commits that were
   fetched but are not in the local branch (the lease compares with the remote-tracking ref,
-  which the fetch just moved). `--force-if-includes` refuses that push. The prompt uses both
-  and the lint requires both. The steward's rebase step still uses the lease alone.
+  which the fetch just moved). `--force-if-includes` refuses that push. An earlier draft of
+  the prompt pushed with both; the rehearsal below is of that draft. Shipped instead: the
+  prompt does not push (the lint rejects a forced `git push` in it), and
+  `fidfab-rewrite-push` pushes with an exact-OID lease,
+  `--force-with-lease=refs/heads/<branch>:<the upstream commit it compared>`, without
+  `--force-if-includes`, which has no effect with that form. The lease alone refuses a push
+  made after its fetch; the tree and merge-base checks before it cover the rest. The
+  steward's rebase step still uses the plain lease.
 - Rehearsed with git 2.53.0 in a scratch repository: a stray unpushed file and a commit by
   someone else, the reset to `@{u}`, both ways of rebuilding the commits with an identical
   tree, an interrupted attempt followed by a restart, the push with both options, and the
