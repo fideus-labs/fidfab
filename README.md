@@ -203,6 +203,10 @@ scripts/litellm-proxy.sh test              # one request to each model
 scripts/setup.sh litellm                   # Fabro provider block, LITELLM_API_KEY, model tests
 ```
 
+`scripts/litellm-proxy.sh test` exits nonzero if either model fails. Fix a Gemini 3.8 Flash
+failure before you continue. If only Gemini 4 Carbon fails (for example, the project has no
+access to it), you can continue: no shipped workflow uses it.
+
 The step adds `[llm.providers.litellm]` with the models `vertex-gemini-3.8-flash` and
 `vertex-gemini-4-carbon` to `~/.fabro/settings.toml`, stores the proxy master key as the
 `LITELLM_API_KEY` vault secret, restarts the server, and runs
