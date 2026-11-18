@@ -27,6 +27,9 @@ a Docker sandbox image and tests. Keep the following in mind.
   `security`, `verify`, `plan`, `git`, `decision`), so every agent node carries exactly one; a
   node whose class does not decide its level goes in the test's `override` table, as the verify
   and address nodes of the Claude and Codex reviews do (`xhigh`).
+- `tests/test-logical-commits.sh` must pass after any change to `logical-commits.fabro`, its
+  prompt, `fidfab-history-tree` or a workflow graph (`validate-workflows.sh` runs it too). A workflow that imports
+  `pr-steward.fabro` imports `logical-commits.fabro` as the steward's only successor.
 - `tests/test-bootstrap.sh` must pass after any change to `fidfab-bootstrap`.
 - `tests/test-build.sh` must pass after any change to `docker/build.sh`.
 - `tests/test-model-aliases.sh` must pass after any change to a `.fabro`, a `fidfab-*-acp`
@@ -63,6 +66,15 @@ a Docker sandbox image and tests. Keep the following in mind.
 - In the sandbox HEAD is `fabro/run/<id>`. The branch the run started from exists as a local
   branch, but only the HEAD reflog (`checkout: moving from <branch> to fabro/run/<id>`) says
   which one it is; Fabro exports no variable for it.
+- Fabro commits a checkpoint after every node (`fabro(<run id>): <node> (<status>)`, empty
+  when the node changed nothing) and pushes `fabro/run/<id>` each time, without updating
+  `origin/<branch>` in the sandbox: `git fetch` before comparing with the remote. No node
+  attribute turns this off (`[run.run_branch] push` is run-wide), so a stage that rewrites
+  history must force-push it, and the nodes after it still add their checkpoints.
+- Edge conditions can read the run context (`condition="context.KEY=value"`). The
+  `context_updates` of a routing node are run-wide: a later imported component sees the latest
+  value, and a missing key takes the unconditional edge. `logical-commits.fabro` routes on
+  `context.pr_status`, which `fidfab-pr-status` sets to its label.
 - `[environments.*]` tables in `workflow.toml` only serve `fabro validate`; they are not sent to
   the server, and `fabro run` ignores `[run.environment] id` (Fabro 0.396). The environment must
   be in the server catalog (`scripts/setup.sh environment`) and selected with

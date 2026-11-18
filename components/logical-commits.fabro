@@ -1,0 +1,54 @@
+// Component: logical-commits
+// Claude (opus) rewrites the topic branch into logically related commits with
+// meaningful messages and force-pushes the pull request branch. Import it after
+// pr-steward: by then the branch holds a checkpoint commit per stage
+// (`fabro(<run id>): <stage> (<status>)`) next to the commits the stages wrote.
+//
+// green runs the rewrite only when the steward loop ended on its last status check
+// finding the pull request green and quiet (fidfab-pr-status records its label as
+// context.pr_status). The steward also stops on "no-pr" and when a reply preview is
+// incomplete; Fabro has then pushed the drafted commits nobody approved, and a
+// rewrite would fold them into the reviewed commits. A missing key (imported
+// without the steward) takes the fallback edge too: the history is left as it is.
+//
+// rewrite runs with fidelity="truncate" for the same reason the steward's agents
+// do: the output of earlier stages, which includes review comment text, must not
+// reach an agent that holds this run's credentials through the preamble.
+//
+// record and verify hold the rewrite to the reviewed code without trusting the agent:
+// record writes the tree of HEAD before it, verify fetches afterwards and fails unless
+// HEAD and origin/<branch> still have that tree (fidfab-history-tree). verify runs
+// whether rewrite succeeded or not, so a rewrite that failed or timed out mid-way is
+// checked too. A failed verify stops at the alarm gate, so a human finds out before the
+// pull request is merged. If record fails, the rewrite is skipped.
+//
+// Fabro checkpoints and pushes the stages that follow, so the pushed branch still
+// ends with their (empty) checkpoint commits.
+digraph LogicalCommits {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  green   [shape=diamond, label="Steward ended green & quiet?"]
+  record  [label="Record reviewed tree", script="fidfab-history-tree record", retry_policy="none"]
+  rewrite [label="Rewrite history (Claude opus)", class="claude opus git",
+           backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
+           prompt="@prompts/logical-commits.md", fidelity="truncate"]
+  verify  [label="Pushed tree is the reviewed tree?", script="fidfab-history-tree verify",
+           retry_policy="none", max_visits=50]
+  alarm   [shape=hexagon, max_visits=50,
+           label="The rewritten branch no longer has the reviewed code (HEAD or GitHub differ from the recorded tree; see verify above). Do not merge the pull request before you have checked it. Re-check after fixing the branch, or acknowledge to end the run."]
+  done    [shape=diamond, label="History rewritten or left"]
+
+  start -> green
+  green -> record [condition="context.pr_status=done"]
+  green -> done
+  record -> rewrite
+  record -> done   [condition="outcome=failed"]  // nothing recorded: leave the history as it is
+  rewrite -> verify  // also after a failed rewrite: it may have pushed part of its work
+  verify -> done
+  verify -> alarm  [condition="outcome=failed"]
+  alarm -> verify  [label="[R] Re-check"]
+  alarm -> done    [label="[A] Acknowledge and end the run"]
+  alarm -> verify  [freeform=true]  // typed text re-checks
+  done -> exit
+}

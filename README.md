@@ -63,6 +63,10 @@ uses the full local machine.
    waits an hour and repeats until the PR is quiet and green. By default you screen each round
    of review comments before an agent reads them and approve the replies before they are posted
    ([Review comments are untrusted](#review-comments-are-untrusted)).
+6. When the steward leaves the PR green and quiet, opus rewrites the branch's commits (Fabro's
+   per-stage checkpoints and the fixes made along the way) into logically related commits with
+   meaningful messages, without changing the code, and force-pushes the pull request branch
+   ([Commit history](#commit-history)).
 
 The models, effort levels, and tools for each step are declared in the DOT graphs under
 `.fabro/workflows/` and the components under `components/`; the prompts are plain Markdown
@@ -81,7 +85,7 @@ against this table, using the role word in each node's `class` (`implement`, `re
 | Claude planning (`medium` plan and its revisions; `large` roadmap draft, its revisions and the response to the critique) | `xhigh` |
 | Verify and address after the Claude review and the Codex review | `xhigh` |
 | Claude and Codex review (CodeRabbit and built-in review, Codex review, Claude review, security review, personal-data security audit, `large` roadmap critique) | `high` |
-| Every other Claude and Codex stage (coverage, verify and address after the other reviews, personal-data decision, commit, pull request, steward) | `medium` |
+| Every other Claude and Codex stage (coverage, verify and address after the other reviews, personal-data decision, commit, pull request, steward, history rewrite) | `medium` |
 | Gemini (Carbon reviews, and the `[run.model]` default) | `medium` |
 
 Claude Code and Codex take the level from `--effort` on the node's `acp.command`; Gemini takes
@@ -120,6 +124,7 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 | `personal-data-audit.fabro` | Codex decides whether the changes touch potentially personal data; if so runs the [Cloudflare security-audit skill](https://github.com/cloudflare/security-audit-skill) and opus addresses the findings |
 | `commit-and-pr.fabro` | Descriptive commit, `gh pr create --fill`, then title and body rewritten from the diff |
 | `pr-steward.fabro` | Hourly loop: review threads (human-screened, replies approved before posting, unless `steward_gate=false`), conflicts, CI; exits when all clear |
+| `logical-commits.fabro` | After the steward, if it ended green and quiet: opus rewrites the branch into logically related commits with meaningful messages, leaving the code unchanged, and force-pushes the pull request branch |
 | `plan-with-files.fabro` | planning-with-files draft, human approve/revise loop |
 
 ## Setup
@@ -421,6 +426,53 @@ For a private repository where every commenter is trusted, run with `-I steward_
 (or change the default in your copy of `workflow.toml`). The steward then reads, replies to and
 resolves threads itself, as before.
 
+### Commit history
+
+Fabro commits a checkpoint after every stage (`fabro(<run id>): <stage> (success)`, holding
+whatever the stage changed, often nothing) and pushes the run branch each time, so the pull
+request collects dozens of them next to the commits the stages wrote. When the steward loop
+ends with the pull request green and quiet, `logical-commits.fabro` has opus rewrite the branch
+into logically related commits with meaningful messages and force-push it. The component and
+its prompt (`components/prompts/logical-commits.md`) keep the rewrite from changing the code,
+discarding anyone's work or hiding work nobody approved:
+
+- it runs only when the steward's last status check said `done` (`fidfab-pr-status` records
+  its label as `context.pr_status`; an image built before that sets no key, and the rewrite is
+  skipped until you rebuild it). When the steward stops for another reason (no pull request,
+  or an incomplete reply preview), the history is left as it is. After an incomplete
+  preview, Fabro's checkpoint push has already published the commits drafted for replies a
+  human has not approved; a rewrite would fold them into the reviewed commits, where they could
+  no longer be told apart or reverted on their own;
+- it rebases onto the merge base with the pull request's base branch, not onto its tip, and
+  pushes only when the tree is identical to the one that was reviewed (`git diff --quiet`) and
+  the work tree is clean (`git status --porcelain`), since Fabro commits and pushes whatever
+  the stage leaves there;
+- the push is `--force-with-lease` against the commit it examined. It changes nothing when
+  the branch does not have exactly one open pull request from this repository (pull requests
+  from forks, which anyone can open from a branch of the same name, are not counted), when
+  `gh` cannot tell (an API or token error), or when GitHub and the sandbox hold different
+  code: it neither overwrites commits someone else pushed nor publishes commits itself;
+- it does not rely on the agent for the code: a script node records the tree of HEAD before
+  the rewrite, and one after it (`fidfab-history-tree verify`, run whether the rewrite
+  succeeded, failed or timed out) fetches and fails unless HEAD and the branch on GitHub
+  still have that tree. A failure stops the run at a human gate: do not merge the pull
+  request before you have checked the branch;
+- each rewritten commit that holds work from the run keeps a `Fabro-Run: <run id>` trailer,
+  so the code can be traced to the run that wrote it even when the commit takes a person as
+  author;
+- it runs with `fidelity="truncate"` and is told not to read review comments, like the
+  steward's agents.
+
+What it leaves behind:
+
+- Fabro still checkpoints the stages that follow the rewrite and pushes them, so the branch
+  ends with a few empty `fabro(...)` commits (`history.rewrite`, `history.verify`,
+  `history.done` and the nodes after them).
+- GitHub runs the checks again on the rewritten head. The code is the same, and the steward
+  loop has ended, so the run does not wait for them.
+- The per-stage checkpoints are no longer on the branch on GitHub, which Fabro reads to fork
+  or rewind a run, so going back to an earlier stage of that run may no longer work.
+
 ### Interactive Claude Code session first, then the factory
 
 Many tasks start as an exploratory conversation. The sandbox supports both orders:
@@ -519,6 +571,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert, routes gated runs to the screen and records its label as `pr_status`; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry (stubbed `gh`) |
+| `tests/test-logical-commits.sh` | host, CI | every workflow hands over from the PR steward to the history rewrite and to nothing else, and the rewrite leads on (not nowhere, not back to the steward), with node statements wrapped over lines read and any reference the scanner cannot read failing; the rewrite runs only on `context.pr_status=done`; the stage is Claude opus at medium effort with `fidelity="truncate"`, and its prompt keeps the pull-request lookup without forks, the identical-tree checks (against GitHub and against the state before), the clean-work-tree check, the leased force-push and the `Fabro-Run:` trailer; the agent sits between the `fidfab-history-tree record` and `verify` nodes, a failed verify stops at a human gate, and the helper passes a code-preserving rewrite and fails changed code in HEAD or on the remote |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |
 | `tests/test-coderabbit.sh` | image | CLI installed; with `CODERABBIT_API_KEY`, `auth login` and `auth status --agent` succeed |
 | `tests/test-claude-acp.sh` | image | ACP `initialize` handshake; with a token, a full `session/prompt` round-trip returns the expected marker |
@@ -569,6 +622,14 @@ docs/vertex-ai-litellm.md  Google Cloud project, service account, monitoring, an
   vendored per workflow (`scripts/sync-components.sh`). Nested imports (a component importing
   a component) are avoided for the same reason.
 - `fabro graph` needs a ready LLM provider on the server before it renders.
+- The history rewrite cannot remove the checkpoint commits of the nodes that run after it: a
+  rewritten pull request branch still ends with a few empty `fabro(...)` commits
+  ([Commit history](#commit-history)).
+- The history rewrite has not run in a live Fabro run yet. A local run (Fabro 0.415) shows the
+  next checkpoint committed on top of a rewritten branch, but local runs do not push, so it is
+  not seen yet that Fabro's push after the stage is the plain fast-forward the stage relies on.
+  If it is not, the code on GitHub is still the reviewed tree: the run ends as
+  `publish_failed`, or the branch gets its checkpoint history back.
 - `fabro run` ignores `[run.environment] id` in `workflow.toml` and uses the server's `default`
   environment unless `--environment fidfab` is passed (Fabro 0.396); an unknown id is not an
   error either. `fabro inspect <run>` shows the resolved image under `run.environment.image`.

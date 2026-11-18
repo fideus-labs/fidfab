@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# fidfab-history-tree — hold the history rewrite (logical-commits.fabro) to the reviewed code.
+#
+# Usage: fidfab-history-tree record | verify
+#
+#   record  before the rewrite: write the tree of HEAD (the code CI and reviewers saw) to
+#           .fidfab/reviews/history-tree.
+#   verify  after the rewrite: `git fetch origin`, then exit non-zero unless HEAD and
+#           origin/<branch> both still have the recorded tree. The rewrite agent holds the
+#           run's GitHub token and is told to force-push; its prompt keeps the tree, but only
+#           this check makes sure it did, also when the agent failed or timed out mid-way.
+#
+# Commits are compared by tree only, so moving, squashing and rewording pass; any change to
+# the code, including a file left in the work tree that Fabro's checkpoint then committed and
+# pushed, fails. When the branch is not on GitHub (never pushed, or deleted; the fetch
+# prunes), only HEAD is compared.
+set -euo pipefail
+file=.fidfab/reviews/history-tree
+tree() { git rev-parse --verify --quiet "$1^{tree}"; }
+
+case "${1:-}" in
+  record)
+    mkdir -p "$(dirname "$file")"
+    t="$(tree HEAD)" || { echo "fidfab-history-tree: HEAD has no tree" >&2; exit 1; }
+    printf '%s\n' "$t" > "$file"
+    echo "history tree recorded: $t"
+    ;;
+  verify)
+    [[ -s "$file" ]] || { echo "FAIL: no recorded tree ($file): the rewrite ran unchecked" >&2; exit 1; }
+    want="$(head -n1 "$file")"
+    branch="$(git branch --show-current)"
+    [[ -n "$branch" ]] || { echo "FAIL: HEAD is detached, cannot tell which branch was pushed" >&2; exit 1; }
+    git fetch -q --prune origin || { echo "FAIL: git fetch origin failed, cannot check what GitHub holds" >&2; exit 1; }
+    status=0
+    head_tree="$(tree HEAD || true)"
+    if [[ "$head_tree" != "$want" ]]; then
+      echo "FAIL: HEAD has tree ${head_tree:-none}, the reviewed tree was $want" >&2
+      git diff --stat "$want" HEAD >&2 || true
+      status=1
+    fi
+    if git rev-parse --verify --quiet "refs/remotes/origin/$branch" >/dev/null; then
+      remote_tree="$(tree "refs/remotes/origin/$branch" || true)"
+      if [[ "$remote_tree" != "$want" ]]; then
+        echo "FAIL: origin/$branch has tree ${remote_tree:-none}, the reviewed tree was $want" >&2
+        git diff --stat "$want" "refs/remotes/origin/$branch" >&2 || true
+        status=1
+      fi
+    else
+      echo "origin/$branch does not exist: compared HEAD only"
+    fi
+    [[ $status -eq 0 ]] && echo "history tree unchanged: $want (HEAD and origin/$branch)"
+    exit $status
+    ;;
+  *) echo "usage: fidfab-history-tree record | verify" >&2; exit 2 ;;
+esac
