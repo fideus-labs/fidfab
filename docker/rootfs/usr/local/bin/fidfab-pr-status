@@ -7,6 +7,8 @@
 # Prints a summary and every unresolved review thread (author, association, and the comment
 # text made inert by quote.jq), then a Fabro routing JSON object:
 #   {"preferred_next_label": "done" | "review" | "work" | "pending" | "no-pr", "context_updates": {...}}
+# context_updates.pr_status repeats the label, so a stage after the steward loop can tell how it
+# ended (logical-commits.fabro rewrites the history only after "done").
 # The same text goes to .fidfab/reviews/pr-status.md, the copy later steward stages read, and
 # the thread ids to .fidfab/reviews/pr-threads.json, which fidfab-pr-reply checks replies against.
 # In gated runs the thread text is listed only when the label is review (a human screens it).
@@ -28,7 +30,7 @@ branch="$(git rev-parse --abbrev-ref HEAD)"
 pr_json="$(gh pr view "$branch" --json number,url,mergeable,statusCheckRollup 2>/dev/null || true)"
 if [[ -z "$pr_json" ]]; then
   echo "No open pull request for branch $branch"
-  echo '{"preferred_next_label":"no-pr","context_updates":{"pr_open":false}}'
+  echo '{"preferred_next_label":"no-pr","context_updates":{"pr_status":"no-pr","pr_open":false}}'
   exit 0
 fi
 
@@ -127,4 +129,4 @@ cat "$out/pr-status.md"
 jq -nc --arg l "$label" --argjson n "$number" --arg u "$url" --arg m "$mergeable" \
   --argjson ur "$unresolved" --argjson aw "$awaiting" --argjson cf "$checks_failed" \
   --argjson cp "$checks_pending" --argjson g "$gated" \
-  '{preferred_next_label:$l, context_updates:{pr_open:true, pr_number:$n, pr_url:$u, mergeable:$m, unresolved_threads:$ur, awaiting_threads:$aw, checks_failed:$cf, checks_pending:$cp, steward_gate:$g}}'
+  '{preferred_next_label:$l, context_updates:{pr_status:$l, pr_open:true, pr_number:$n, pr_url:$u, mergeable:$m, unresolved_threads:$ur, awaiting_threads:$aw, checks_failed:$cf, checks_pending:$cp, steward_gate:$g}}'

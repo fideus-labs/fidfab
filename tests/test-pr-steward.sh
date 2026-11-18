@@ -101,6 +101,7 @@ check "complete threads are not marked cut"         not grep -qF 'src/a.rs:10  (
 check "threads ending with our reply are marked"    grep -qF 'src/d.rs:4  (last reply is ours)  id PRRT_4' "$s"
 check "later stages read the same listing"          diff <(sed '$d' "$s") .fidfab/reviews/pr-status.md
 check "threads awaiting a reply are counted"        test "$(tail -n1 "$s" | jq .context_updates.awaiting_threads)" = 2
+check "the label is recorded as pr_status"          test "$(tail -n1 "$s" | jq -r .context_updates.pr_status)" = review
 check "ungated: threads go straight to the steward" test "$(FIDFAB_STEWARD_GATE=false fidfab-pr-status | label)" = work
 check "only our replies left: wait, no gate"        test "$(THREADS="$FIX/answered.json" fidfab-pr-status | label)" = pending
 check "... and no unscreened text for the steward"  not grep -q 'Rename this' .fidfab/reviews/pr-status.md
@@ -108,11 +109,13 @@ check "our login without the marker awaits a reply" test "$(THREADS="$FIX/unmark
 check "unknown viewer: every thread awaits a reply" test "$(GH_NO_VIEWER=1 fidfab-pr-status | tail -n1 | jq .context_updates.awaiting_threads)" = 3
 check "gated conflicts still go to the steward"     test "$(PR="$FIX/conflict.json" THREADS="$FIX/answered.json" fidfab-pr-status | label)" = work
 check "nothing unresolved and green: done"          test "$(THREADS="$FIX/resolved.json" fidfab-pr-status | label)" = "done"
+check "... recorded as pr_status (logical-commits)" test "$(THREADS="$FIX/resolved.json" fidfab-pr-status | tail -n1 | jq -r .context_updates.pr_status)" = "done"
 check "threads on later pages are listed"           grep -qF 'id PRRT_5' <(THREADS="$FIX/resolved.json" PAGE2="$FIX/page2.json" fidfab-pr-status)
 check "... and routed"                              test "$(THREADS="$FIX/resolved.json" PAGE2="$FIX/page2.json" fidfab-pr-status | label)" = review
 check "a listing that fails to render fails"        not quiet env THREADS="$FIX/broken.json" fidfab-pr-status
 check "... and leaves no partial listing"           test ! -e .fidfab/reviews/pr-status.md
 check "no pull request: no-pr"                      test "$(GH_NO_PR=1 fidfab-pr-status | label)" = no-pr
+check "... recorded as pr_status"                   test "$(GH_NO_PR=1 fidfab-pr-status | tail -n1 | jq -r .context_updates.pr_status)" = no-pr
 check "a failed thread query fails the stage"       not quiet env GH_FAIL_THREADS=1 fidfab-pr-status
 check "... and leaves no listing behind"            test ! -e .fidfab/reviews/pr-status.md
 
