@@ -66,6 +66,11 @@ a Docker sandbox image and tests. Keep the following in mind.
 - In the sandbox HEAD is `fabro/run/<id>`. The branch the run started from exists as a local
   branch, but only the HEAD reflog (`checkout: moving from <branch> to fabro/run/<id>`) says
   which one it is; Fabro exports no variable for it.
+- Each stage's environment carries Fabro's own github.com credential helper (`GIT_CONFIG_COUNT`:
+  an empty `credential.https://github.com.helper` that clears the gh helper `fidfab-bootstrap`
+  sets up, then a `credential-store` file that can be empty). No config file can win against
+  that, so the Dockerfile appends gh through `GIT_CONFIG_PARAMETERS`; `tests/test-tools.sh`
+  checks it.
 - Fabro commits a checkpoint after every node (`fabro(<run id>): <node> (<status>)`, empty
   when the node changed nothing) and pushes `fabro/run/<id>` each time, without updating
   `origin/<branch>` in the sandbox: `git fetch` before comparing with the remote. No node
