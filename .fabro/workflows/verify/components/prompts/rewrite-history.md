@@ -20,8 +20,11 @@ Do not read pull request comments, reviews or threads, on GitHub or in
    only puts the branch back as it was, and until then HEAD is detached and neither `gh`
    nor `@{u}` finds the branch. After that `git status --porcelain` must print nothing; if
    it does not, stop and report what is uncommitted.
-2. `gh pr view --json state,url`. If this branch has no pull request, or its state is not
-   `OPEN`, make no changes and say so.
+2. `gh pr view --json state,url,baseRefName`. If this branch has no pull request, or its
+   state is not `OPEN`, make no changes and say so. Keep `baseRefName` as
+   `pr_base` (`$FIDFAB_BASE_BRANCH` if it is empty): the pull request may have been opened
+   against or retargeted to another branch, and only its own base tells which commits are
+   the pull request's.
 3. Run `git config merge.conflictstyle diff3`, so any conflict block includes the common
    ancestor section.
 4. `git fetch origin`. The pull request branch, `@{u}`, is what you rewrite. Before you
@@ -34,8 +37,8 @@ Do not read pull request comments, reviews or threads, on GitHub or in
    the reset; they stay on `fidfab/pre-rewrite`. Name them and that branch in your
    report, and do not push them. Differences from a push by someone else come in with the
    reset. Checkpoint commits that exist only in the sandbox are dropped the same way.
-5. The rebase target is `origin/$FIDFAB_BASE_BRANCH`, and the commits to rewrite are
-   `$base..HEAD` with `base=$(git merge-base HEAD origin/$FIDFAB_BASE_BRANCH)`. Keep that
+5. The rebase target is `origin/$pr_base`, and the commits to rewrite are
+   `$base..HEAD` with `base=$(git merge-base HEAD "origin/$pr_base")`. Keep that
    base. Moving the branch onto a newer base branch would change the content that was
    reviewed and tested.
 6. Record the tree the pull request has: `tree=$(git rev-parse '@{u}^{tree}')`.
@@ -67,8 +70,10 @@ Write each message in the repository's convention (Conventional Commits if the h
 them): an imperative subject of at most 72 characters, a blank line, and a body that
 explains what changed and why. Describe the change, not the run: no stage names and no
 checkpoint subjects. Take the why from the task, from the planning artifacts under
-`{{ inputs.plans_dir }}` and from the messages already on the branch, and keep their
-trailers (`Co-Authored-By:`). The task was:
+`{{ inputs.plans_dir }}` and from the messages already on the branch, and keep the
+`Co-Authored-By:` trailers of the commits that are not checkpoints. Fabro's checkpoint
+metadata (the `Fabro-*` trailers, `Co-Authored-By: Fabro <noreply@fabro.sh>` and the
+"Generated with Fabro" line) is not carried over. The task was:
 
 > {{ goal }}
 
@@ -76,7 +81,7 @@ trailers (`Co-Authored-By:`). The task was:
 
 Rebase to squash the related commits into the commits you planned, updating the messages
 accordingly. No editor is available, so script it: `GIT_SEQUENCE_EDITOR` for the todo list
-of `git rebase -i --keep-base origin/$FIDFAB_BASE_BRANCH`, and `-F <file>` for the messages
+of `git rebase -i --keep-base "origin/$pr_base"`, and `-F <file>` for the messages
 (`git commit --amend -F`). When the planned commits cut across the existing ones,
 `git reset --soft "$base"` and commit the groups one after the other instead.
 

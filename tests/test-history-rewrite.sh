@@ -48,6 +48,8 @@ fail=0; n=0
 # check NAME fail MESSAGE              ... fails it, with MESSAGE in the output
 # EDIT is read from stdin: shell commands run in the scratch repository, with $wf, $toml,
 # $comp and $prompt naming its four files.
+# Edits use perl -pi, not sed -i: BSD sed (macOS hosts) takes no -i without a suffix, writes
+# \n in a replacement as "n" and has no \| in basic regular expressions.
 check() {
   local name="$1" want="$2" message="${3:-}" r="$tmp/r$((n += 1))" rc=0 edit
   edit="$(cat)"
@@ -69,56 +71,56 @@ check() {
 
 check "minimal repository" pass <<<':'
 check "spaces around = and a label with ] and ->" pass <<'EDIT'
-sed -i 's|ship -> steward -> history -> done|ship -> steward\n  steward -> history [ label = "[R] a -> b" ]\n  history -> done|' $wf
-sed -i 's|import="components/rewrite-history.fabro"|import = "components/rewrite-history.fabro"|' $wf
+perl -pi -e 's|ship -> steward -> history -> done|ship -> steward\n  steward -> history [ label = "[R] a -> b" ]\n  history -> done|' $wf
+perl -pi -e 's|import="components/rewrite-history.fabro"|import = "components/rewrite-history.fabro"|' $wf
 EDIT
 check "workflow without a steward" pass <<'EDIT'
-sed -i '/pr-steward\|rewrite-history/d; s|ship -> steward -> history -> done|ship -> done|' $wf
+perl -pi -e '$_ = "" if /pr-steward|rewrite-history/; s|ship -> steward -> history -> done|ship -> done|' $wf
 printf '[run.clone]\nenabled = true\n' > $toml
 EDIT
-check "comment after the setting" pass <<<'sed -i "s|^push = false|push = false  # see README|" $toml'
+check "comment after the setting" pass <<<'perl -pi -e "s|^push = false|push = false  # see README|" $toml'
 
-check "push = true" fail "push is 'true'" <<<'sed -i "s|^push = false|push = true|" $toml'
+check "push = true" fail "push is 'true'" <<<'perl -pi -e "s|^push = false|push = true|" $toml'
 check "no [run.run_branch] table" fail "push is 'unset'" <<<'printf "[run.clone]\nenabled = true\n" > $toml'
-check "push = false only in a comment" fail "push is 'unset'" <<<'sed -i "s|^push = false|# push = false|" $toml'
+check "push = false only in a comment" fail "push is 'unset'" <<<'perl -pi -e "s|^push = false|# push = false|" $toml'
 check "push = false in another table" fail "push is 'unset'" <<<'printf "[run.run_branch]\nenabled = true\n\n[run.other]\npush = false\n" > $toml'
 check "no workflow.toml" fail "push is 'unset'" <<<'rm $toml'
 
 check "steward goes straight to done" fail "the steward 'steward' must be followed" <<'EDIT'
-sed -i '/rewrite-history/d; s|ship -> steward -> history -> done|ship -> steward -> done|' $wf
+perl -pi -e '$_ = "" if /rewrite-history/; s|ship -> steward -> history -> done|ship -> steward -> done|' $wf
 EDIT
 check "rewrite imported but not wired" fail "the steward 'steward' must be followed" <<'EDIT'
-sed -i 's|ship -> steward -> history -> done|ship -> steward -> done|' $wf
+perl -pi -e 's|ship -> steward -> history -> done|ship -> steward -> done|' $wf
 EDIT
 check "... and reported as unreachable" fail "'history' (components/rewrite-history.fabro) is not reached" <<'EDIT'
-sed -i 's|ship -> steward -> history -> done|ship -> steward -> done|' $wf
+perl -pi -e 's|ship -> steward -> history -> done|ship -> steward -> done|' $wf
 EDIT
 check "edge to the rewrite only in a comment" fail "the steward 'steward' must be followed" <<'EDIT'
-sed -i 's|ship -> steward -> history -> done|ship -> steward -> done  // steward -> history|' $wf
+perl -pi -e 's|ship -> steward -> history -> done|ship -> steward -> done  // steward -> history|' $wf
 EDIT
 check "steward has a second successor" fail "followed by: done history" <<'EDIT'
-sed -i 's|^  done -> exit|  steward -> done [condition="outcome=failed"]\n&|' $wf
+perl -pi -e 's|^  done -> exit|  steward -> done [condition="outcome=failed"]\n$&|' $wf
 EDIT
 check "rewrite also on the no-changes path" fail "not from 'has_changes'" <<'EDIT'
-sed -i 's|has_changes -> done \[label="no-changes"\]|has_changes -> history [label="no-changes"]|' $wf
+perl -pi -e 's|has_changes -> done \[label="no-changes"\]|has_changes -> history [label="no-changes"]|' $wf
 EDIT
 check "rewrite in a workflow without a steward" fail "not from 'ship'" <<'EDIT'
-sed -i '/pr-steward/d; s|ship -> steward -> history -> done|ship -> history -> done|' $wf
+perl -pi -e '$_ = "" if /pr-steward/; s|ship -> steward -> history -> done|ship -> history -> done|' $wf
 EDIT
 check "rewrite before the steward" fail "not from 'ship'" <<'EDIT'
-sed -i 's|ship -> steward -> history -> done|ship -> history -> steward -> done|' $wf
+perl -pi -e 's|ship -> steward -> history -> done|ship -> history -> steward -> done|' $wf
 EDIT
 
-check "fable instead of opus" fail "must run 'fidfab-claude-acp --model opus --effort medium'" <<<'sed -i "s|--model opus|--model fable|" $comp'
-check "high effort" fail "must run 'fidfab-claude-acp --model opus --effort medium'" <<<'sed -i "s|--effort medium|--effort high|" $comp'
-check "Codex instead of Claude" fail "must run 'fidfab-claude-acp --model opus --effort medium'" <<<'sed -i "s|fidfab-claude-acp --model opus|fidfab-codex-acp --model terra|" $comp'
-check "default fidelity" fail 'must set fidelity="truncate"' <<<'sed -i "s|, fidelity=\"truncate\"||" $comp'
-check "fidelity only in a comment" fail 'must set fidelity="truncate"' <<<'sed -i "s|, fidelity=\"truncate\"\]|]  // fidelity=\"truncate\"|" $comp'
-check "two agent nodes" fail "expected exactly one agent node" <<<'sed -i "s|^  done \[shape=diamond\]|  extra [backend=\"acp\", acp.command=\"fidfab-claude-acp --model opus --effort medium\", prompt=\"@prompts/rewrite-history.md\"]\n&|" $comp'
+check "fable instead of opus" fail "must run 'fidfab-claude-acp --model opus --effort medium'" <<<'perl -pi -e "s|--model opus|--model fable|" $comp'
+check "high effort" fail "must run 'fidfab-claude-acp --model opus --effort medium'" <<<'perl -pi -e "s|--effort medium|--effort high|" $comp'
+check "Codex instead of Claude" fail "must run 'fidfab-claude-acp --model opus --effort medium'" <<<'perl -pi -e "s|fidfab-claude-acp --model opus|fidfab-codex-acp --model terra|" $comp'
+check "default fidelity" fail 'must set fidelity="truncate"' <<<'perl -pi -e "s|, fidelity=\"truncate\"||" $comp'
+check "fidelity only in a comment" fail 'must set fidelity="truncate"' <<<'perl -pi -e "s|, fidelity=\"truncate\"\]|]  // fidelity=\"truncate\"|" $comp'
+check "two agent nodes" fail "expected exactly one agent node" <<<'perl -pi -e "s|^  done \[shape=diamond\]|  extra [backend=\"acp\", acp.command=\"fidfab-claude-acp --model opus --effort medium\", prompt=\"\@prompts/rewrite-history.md\"]\n\$&|" $comp'
 check "component missing" fail "imported by a workflow but missing" <<<'rm $comp'
 check "prompt file missing" fail "needs a prompt file" <<<'rm $prompt'
 check "prompt without a lease" fail "must push with 'git push --force-with-lease --force-if-includes'" <<<'echo "Push with git push." > $prompt'
-check "prompt with a lease alone" fail "must push with 'git push --force-with-lease --force-if-includes'" <<<'sed -i "s| --force-if-includes||" $prompt'
+check "prompt with a lease alone" fail "must push with 'git push --force-with-lease --force-if-includes'" <<<'perl -pi -e "s| --force-if-includes||" $prompt'
 check "prompt with a plain --force" fail "must not push with a plain --force" <<<'echo "Or run \`git push --force\`." >> $prompt'
 check "prompt with push -f to a remote" fail "must not push with a plain --force" <<<'echo "Or run git push origin HEAD -f" >> $prompt'
 
