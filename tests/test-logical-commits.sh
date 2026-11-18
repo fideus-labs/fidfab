@@ -85,6 +85,11 @@ check_wiring() {
       } else if (st ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*[[:space:]]*->/) {
         chain = st; sub(/[[:space:]]*\[.*$/, "", chain)
         n = split(chain, ids, /[[:space:]]*->[[:space:]]*/)
+        for (i = 1; i <= n; i++)
+          if (trim(ids[i]) !~ /^[A-Za-z_][A-Za-z0-9_.]*$/) {  # a {group}, "quoted" id or port
+            st = trim(st); gsub(/[[:space:]]+/, " ", st); print "FAIL: " file ": an edge the scanner cannot read: " st
+            return
+          }
         for (i = 1; i < n; i++) succ[trim(ids[i])] = succ[trim(ids[i])] " " trim(ids[i + 1])
       } else {
         bare = st; gsub(/"([^"\\]|\\.)*"/, "", bare)
@@ -156,9 +161,13 @@ fixture quoted '  steward [import="components/pr-steward.fabro"]
   history [import="components/logical-commits.fabro", label="steward -> history"]
   steward -> history -> done
   "steward" -> done'
+fixture grouped '  steward [import="components/pr-steward.fabro"]
+  history [import="components/logical-commits.fabro"]
+  steward -> history -> done
+  history -> {steward}'
 got="$(cd "$fix" && check_wiring ok.fabro missing.fabro extra.fabro before.fabro dangling.fabro none.fabro \
   deadend.fabro oneline.fabro commented.fabro wrapped.fabro wrappedbad.fabro multiline.fabro unread.fabro \
-  quoted.fabro)"
+  quoted.fabro grouped.fabro)"
 want="seen ok.fabro
 seen missing.fabro
 FAIL: missing.fabro: steward (pr-steward) must lead to logical-commits only, not to: done
@@ -183,21 +192,26 @@ FAIL: wrappedbad.fabro: steward (pr-steward) must lead to logical-commits only, 
 seen multiline.fabro
 FAIL: unread.fabro: not an import the scanner reads: [import=\"components/pr-steward.fabro\"]
 FAIL: quoted.fabro: an edge the scanner cannot read: \"steward\" -> done
-seen quoted.fabro"
+seen quoted.fabro
+FAIL: grouped.fabro: an edge the scanner cannot read: history -> {steward}
+seen grouped.fabro"
 [[ "$got" == "$want" ]] || { echo "FAIL: scanner self-test; got:" >&2; echo "$got" >&2; exit 1; }
 
 status=0
 fail() { echo "FAIL: $*" >&2; status=1; }
 
-# Every workflow that stewards a pull request rewrites its history afterwards.
-workflows=0
+# Every workflow that stewards a pull request rewrites its history afterwards, and each
+# built-in workflow does both.
+workflows=0; seen=""
 while read -r line; do
   case "$line" in
-    "seen "*) workflows=$((workflows + 1)) ;;
+    "seen "*) workflows=$((workflows + 1)); seen="$seen ${line#seen } " ;;
     *) fail "${line#FAIL: }" ;;
   esac
 done < <(check_wiring .fabro/workflows/*/workflow.fabro)
-[[ $workflows -gt 0 ]] || fail "no workflow imports the PR steward"
+for w in small medium large verify; do
+  [[ "$seen" == *" .fabro/workflows/$w/workflow.fabro "* ]] || fail "$w: the workflow does not import the PR steward"
+done
 
 # The stage: one agent node, Claude opus at medium effort, no preamble from earlier stages.
 # Comments are dropped first (whole lines and trailing ones): the component's header
@@ -244,16 +258,22 @@ for want in 'git config merge.conflictstyle diff3' \
   'If the fetch fails, change nothing' \
   '`git rev-parse "<remote>^{tree}"` and' \
   'git merge-base --is-ancestor <remote> HEAD' \
-  'holds exactly `<remote>`' \
-  'git rev-parse HEAD > .fidfab/reviews/history-pushed' \
+  '`<recorded>`, what GitHub had for the branch' \
+  '`git merge-base --is-ancestor <recorded> <remote>`' \
+  'one of the two lines of' \
+  "printf '%s\n' \"<remote>\" \"\$(git rev-parse HEAD)\" > .fidfab/reviews/history-pushed" \
   '`git rev-parse "<before>^{tree}"` and' \
   'outside the work tree (`mktemp -d`)' \
-  '`git status --porcelain` has to print nothing' \
   'git push --force-with-lease="<branch>:<remote>" origin "HEAD:refs/heads/<branch>"' \
   'keep exactly one, `Fabro-Run: <run id>`' \
   '{% include "partials/workspace.md" %}'; do
   grep -qF -- "$want" "$prompt" || fail "$prompt: lacks $want"
 done
+# Both clean-work-tree checks list untracked files whatever status.showUntrackedFiles says.
+[[ "$(grep -c 'git status --porcelain --untracked-files=all' "$prompt")" == 2 &&
+  "$(grep -c 'git status --porcelain' "$prompt")" == 2 ]] ||
+  fail "$prompt: both work-tree checks must use git status --porcelain --untracked-files=all"
+grep -qF 'succeeds and prints nothing' "$prompt" || fail "$prompt: the status check must also succeed"
 
 # The prompt's safety commands behave as it says, on a scratch repository with a bare remote
 # standing in for GitHub. Offline: git only.
@@ -262,6 +282,8 @@ git init -q --bare "$fix/remote.git"
 git init -q -b main "$fix/work"
 g remote add origin "$fix/remote.git"
 echo .fidfab/ >> "$fix/work/.git/info/exclude"  # as fidfab-bootstrap does
+g config status.showUntrackedFiles no  # the prompt's status check must not depend on it
+porcelain() { g status --porcelain --untracked-files=all; }
 g commit -q --allow-empty -m base
 g push -q origin main
 g checkout -q -b topic
@@ -300,11 +322,11 @@ g reset -q --hard HEAD~1
 # the stage (add everything, commit) would push it. Only the clean-work-tree check sees it.
 echo 'Add b' > "$fix/work/msg"
 same_tree "$before" HEAD || fail "rewrite: the tree check against <before> sees the work tree"
-[[ -n "$(g status --porcelain)" ]] || fail "rewrite: status --porcelain misses a file left in the work tree"
+[[ -n "$(porcelain)" ]] || fail "rewrite: the status check misses a file left in the work tree"
 g add -A; g commit -q -m 'fabro(r): history.rewrite (success)'
 same_tree "$before" HEAD && fail "rewrite: the checkpoint after the stage did not pick up the file"
 g reset -q --hard HEAD~1
-[[ -z "$(g status --porcelain)" ]] || fail "rewrite: status --porcelain not empty on a clean work tree"
+[[ -z "$(porcelain)" ]] || fail "rewrite: the status check is not empty on a clean work tree"
 # Step 2 by interactive rebase without an editor: a todo list through GIT_SEQUENCE_EDITOR.
 rewritten="$(g rev-parse HEAD)"
 g reset -q --hard "$before"
@@ -327,30 +349,53 @@ g "${lease[@]}" 2>/dev/null && fail "rewrite: --force-with-lease overwrote a com
 g fetch -q origin
 g merge-base --is-ancestor origin/topic HEAD && fail "rewrite: is-ancestor misses a commit pushed meanwhile"
 same_tree origin/topic HEAD && fail "rewrite: a foreign commit looks like an earlier rewrite"
-# Put GitHub back and push: the lease on the examined commit lets the rewrite through.
-# Step 3.3 records the commit first, so a retry can tell its own push from someone else's.
+# Step 1.5: who moved GitHub since the record node saw <recorded>. Fabro's checkpoints and
+# this stage's own recorded attempts pass; a push, rewording or rewind by someone else stops it.
+recorded="$remote"
+pushed="$fix/work/.fidfab/reviews/history-pushed"
+may_continue() {
+  local r; r="$(g rev-parse origin/topic)"
+  { g merge-base --is-ancestor "$recorded" "$r" && g merge-base --is-ancestor "$r" HEAD; } ||
+    grep -qxF "$r" "$pushed" 2>/dev/null
+}
 git -C "$fix/remote.git" update-ref refs/heads/topic "$remote"
 g fetch -q --force origin
-mkdir -p "$fix/work/.fidfab/reviews"; g rev-parse HEAD > "$fix/work/.fidfab/reviews/history-pushed"
+g reset -q --hard "$before"
+may_continue || fail "rewrite: step 1.5 rejects GitHub as recorded"
+g commit -q --allow-empty -m 'fabro(r): history.record (success)'
+g push -q origin topic; g fetch -q origin
+may_continue || fail "rewrite: step 1.5 rejects a Fabro checkpoint pushed after the record"
+# Someone rewinds GitHub to a same-tree ancestor of the recorded head.
+recorded="$(g rev-parse HEAD)"
+git -C "$fix/remote.git" update-ref refs/heads/topic "$remote"; g fetch -q --force origin
+{ same_tree origin/topic HEAD && g merge-base --is-ancestor origin/topic HEAD; } || fail "rewrite: the rewind is not a same-tree ancestor"
+may_continue && fail "rewrite: step 1.5 accepts a rewind behind the recorded head"
+recorded="$remote"
+# An attempt records the lease and its candidate (Step 3.3) and stops before pushing: the
+# retry starts from the candidate, and GitHub still holds what the attempt found.
+g reset -q --hard "$rewritten"
+may_continue && fail "rewrite: step 1.5 accepts a rewritten checkout without a record"
+mkdir -p "$(dirname "$pushed")"; printf '%s\n' "$remote" "$(g rev-parse HEAD)" > "$pushed"
+may_continue || fail "rewrite: step 1.5 rejects a retry whose earlier attempt never pushed"
+# The push: the lease on the examined commit lets the rewrite through.
 g "${lease[@]}" || fail "rewrite: --force-with-lease rejected the expected remote"
 [[ "$(git -C "$fix/remote.git" rev-parse topic)" == "$(g rev-parse HEAD)" ]] || fail "rewrite: GitHub does not hold the rewrite"
-[[ -z "$(g status --porcelain)" ]] || fail "rewrite: the history-pushed record shows up in the work tree"
-# Retry after an earlier attempt pushed: not an ancestor, the same tree, and the recorded
-# push (Step 1.5).
-pushed_by_us() { [[ "$(cat "$fix/work/.fidfab/reviews/history-pushed")" == "$(g rev-parse origin/topic)" ]]; }
+[[ -z "$(porcelain)" ]] || fail "rewrite: the history-pushed record shows up in the work tree"
+# Retry after the earlier attempt pushed, from the checkout before it: not an ancestor, the
+# same tree, and recorded.
 g reset -q --hard "$before"
 g fetch -q origin
 g merge-base --is-ancestor origin/topic HEAD && fail "rewrite: is-ancestor accepts a pushed rewrite as ancestor"
 same_tree origin/topic HEAD || fail "rewrite: an earlier pushed rewrite does not have the tree"
-pushed_by_us || fail "rewrite: an earlier pushed rewrite is not recognised by its record"
-# Someone rewords the branch on GitHub: same tree, not an ancestor, but not our push.
+may_continue || fail "rewrite: step 1.5 rejects the rewrite an earlier attempt pushed"
+# Someone rewords the branch on GitHub: same tree, not an ancestor, not recorded.
 git -C "$fix/other" fetch -q origin; git -C "$fix/other" reset -q --hard origin/topic
 git -C "$fix/other" -c user.name=o -c user.email=o@example.com -c commit.gpgsign=false \
   commit -q --amend -m reworded
 git -C "$fix/other" push -q --force origin HEAD:refs/heads/topic
 g fetch -q origin
 same_tree origin/topic HEAD || fail "rewrite: the reworded branch should keep the tree"
-pushed_by_us && fail "rewrite: a foreign rewording passes for an earlier rewrite"
+may_continue && fail "rewrite: step 1.5 accepts a foreign rewording of the branch"
 
 # fidfab-history-tree on the same repository: a code-preserving rewrite passes, changed code
 # on either side fails.
@@ -359,7 +404,7 @@ h() { (cd "$fix/work" && "$ht" "$@"); }
 g checkout -q -B topic "$before"; g push -q --force origin topic
 h verify >/dev/null 2>&1 && fail "history-tree: verify passes without a recorded tree"
 h record >/dev/null || fail "history-tree: record failed"
-[[ "$(cat "$fix/work/.fidfab/reviews/history-tree")" == "$(g rev-parse "HEAD^{tree}")"$'\ntopic\npublished' ]] || fail "history-tree: recorded the wrong tree, branch or remote state"
+[[ "$(cat "$fix/work/.fidfab/reviews/history-tree")" == "$(g rev-parse "HEAD^{tree}")"$'\ntopic\n'"$(g rev-parse origin/topic)" ]] || fail "history-tree: recorded the wrong tree, branch or GitHub commit"
 g reset -q --soft "$base"; g commit -q -m 'Add a and b'; g push -q --force origin topic
 h verify >/dev/null || fail "history-tree: verify rejects a code-preserving rewrite"
 echo changed > "$fix/work/b"; g commit -q -am tweak
@@ -373,8 +418,9 @@ h verify >/dev/null 2>&1 && fail "history-tree: verify passes on a branch other 
 g checkout -q topic
 g push -q origin --delete topic
 h verify >/dev/null 2>&1 && fail "history-tree: verify passes when the pushed branch disappeared"
-h record >/dev/null || fail "history-tree: record failed on a branch that was never pushed"
-h verify >/dev/null || fail "history-tree: verify rejects a branch that was never pushed"
+h record >/dev/null || fail "history-tree: record failed on a branch not on GitHub"
+[[ "$(sed -n 3p "$fix/work/.fidfab/reviews/history-tree")" == unpublished ]] || fail "history-tree: a branch not on GitHub is not recorded as unpublished"
+h verify >/dev/null || fail "history-tree: verify rejects a branch not on GitHub at record time"
 g rev-parse "HEAD^{tree}" > "$fix/work/.fidfab/reviews/history-tree"
 h verify >/dev/null 2>&1 && fail "history-tree: verify accepts a record without branch and remote"
 rc=0; h bogus >/dev/null 2>&1 || rc=$?; [[ $rc -eq 2 ]] || fail "history-tree: unknown command not rejected with 2"

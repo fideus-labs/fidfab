@@ -3,9 +3,11 @@
 #
 # Usage: fidfab-history-tree record | verify
 #
-#   record  before the rewrite: `git fetch origin`, then write the tree of HEAD (the code CI and
-#           reviewers saw), the current branch and whether origin/<branch> exists to
-#           .fidfab/reviews/history-tree.
+#   record  before the rewrite: `git fetch origin`, then write three lines to
+#           .fidfab/reviews/history-tree: the tree of HEAD (the code CI and reviewers saw), the
+#           current branch, and the commit origin/<branch> points to ("unpublished" when it
+#           does not exist). The rewrite prompt reads the third line to tell Fabro's
+#           checkpoints from a push by someone else.
 #   verify  after the rewrite: `git fetch origin`, then exit non-zero unless HEAD is still on the
 #           recorded branch and both HEAD and origin/<branch> have the recorded tree. The
 #           rewrite agent holds the run's GitHub token and is told to force-push; its prompt
@@ -15,7 +17,7 @@
 # Commits are compared by tree only, so moving, squashing and rewording pass; any change to
 # the code, including a file left in the work tree that Fabro's checkpoint then committed and
 # pushed, fails. A branch that was on GitHub at record time must still be there (the fetch
-# prunes); one that was not (never pushed) is compared in HEAD only.
+# prunes); one that was not on GitHub then is compared in HEAD only.
 # The record lives in the sandbox the agent can write to: this catches mistakes and an
 # interrupted rewrite, not an agent that deliberately rewrites the record as well.
 set -euo pipefail
@@ -34,7 +36,7 @@ case "${1:-}" in
     t="$(tree HEAD)" || { echo "fidfab-history-tree: HEAD has no tree" >&2; exit 1; }
     branch="$(current_branch)"
     fetch
-    remote=unpublished; published "$branch" && remote=published
+    remote=unpublished; published "$branch" && remote="$(git rev-parse "refs/remotes/origin/$branch")"
     mkdir -p "$(dirname "$file")"
     printf '%s\n%s\n%s\n' "$t" "$branch" "$remote" > "$file"
     echo "history tree recorded: $t (branch $branch, $remote)"
@@ -42,7 +44,7 @@ case "${1:-}" in
   verify)
     [[ -s "$file" ]] || { echo "FAIL: no recorded tree ($file): the rewrite ran unchecked" >&2; exit 1; }
     { read -r want; read -r branch; read -r remote; } < "$file" || true
-    [[ -n "$want" && -n "$branch" && "$remote" =~ ^(un)?published$ ]] ||
+    [[ -n "$want" && -n "$branch" && "$remote" =~ ^(unpublished|[0-9a-f]{40}|[0-9a-f]{64})$ ]] ||
       { echo "FAIL: $file is incomplete, re-record before the rewrite" >&2; exit 1; }
     status=0
     now="$(current_branch)"
@@ -64,11 +66,11 @@ case "${1:-}" in
         git diff --stat "$want" "refs/remotes/origin/$branch" >&2 || true
         status=1
       fi
-    elif [[ "$remote" == published ]]; then
+    elif [[ "$remote" != unpublished ]]; then
       echo "FAIL: origin/$branch was on GitHub before the rewrite and is gone now" >&2
       status=1
     else
-      echo "origin/$branch was never pushed: compared HEAD only"
+      echo "origin/$branch was not on GitHub at record time and is not now: compared HEAD only"
     fi
     [[ $status -eq 0 ]] && echo "history tree unchanged: $want ($branch, HEAD and GitHub)"
     exit $status
