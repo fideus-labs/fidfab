@@ -24,13 +24,14 @@ Do not read pull request comments, reviews or threads, on GitHub or in
    `OPEN`, make no changes and say so.
 3. Run `git config merge.conflictstyle diff3`, so any conflict block includes the common
    ancestor section.
-4. `git fetch origin`. The pull request branch, `@{u}`, is what you rewrite, so start from
-   it with `git reset --hard @{u}`. First look at `git diff --stat @{u} HEAD` and
+4. `git fetch origin`. The pull request branch, `@{u}`, is what you rewrite. Before you
+   leave the sandbox's HEAD, look at `git diff --stat @{u} HEAD` and
    `git log --oneline @{u}..HEAD`, and keep what the sandbox has with
    `git branch fidfab/pre-rewrite HEAD`; if that branch exists, an earlier attempt made it
-   before rewriting anything, so keep it as it is. Changes the sandbox has beyond the pull
-   request never reached it, such as steward commits a human has not approved, and are left
-   out by the reset; they stay on `fidfab/pre-rewrite`. Name them and that branch in your
+   before rewriting anything, so keep it as it is. Only then start from the pull request
+   branch with `git reset --hard @{u}`. Changes the sandbox has beyond the pull request
+   never reached it, such as steward commits a human has not approved, and are left out by
+   the reset; they stay on `fidfab/pre-rewrite`. Name them and that branch in your
    report, and do not push them. Differences from a push by someone else come in with the
    reset. Checkpoint commits that exist only in the sandbox are dropped the same way.
 5. The rebase target is `origin/$FIDFAB_BASE_BRANCH`, and the commits to rewrite are
@@ -51,9 +52,10 @@ commits the branch should have:
   documentation is one commit. A fix for something this branch introduced is folded into the
   commit that introduced it. A change that stands on its own (a refactor the feature builds
   on, an unrelated fix) is its own commit. A small task is usually one commit.
-- Commits that already are logical commits with a meaningful message, such as the ones the
-  branch had before the run started (`git log "$base".."$FIDFAB_START_HEAD"`), stay. Fold
-  the run's fixes to their code into them and change a message only where it no longer fits.
+- Commits that already are logical commits with a meaningful message stay, such as the ones
+  the branch had before the run started: `git log "$base".."$FIDFAB_START_HEAD"` apart from
+  Fabro's `fabro(<run id>): start` checkpoint at its tip, which goes like the others. Fold the
+  run's fixes to their code into them and change a message only where it no longer fits.
 - Order the commits so that each one leaves the repository building and its tests passing.
 - No checkpoint commits, no empty commits and no "address review" commits remain.
 - Commits by other people keep their author. The run's own commits are the checkpoint
