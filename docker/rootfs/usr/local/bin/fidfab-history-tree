@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# fidfab-history-tree — hold the history rewrite (logical-commits.fabro) to the reviewed code.
+#
+# Usage: fidfab-history-tree record | verify
+#
+#   record  before the rewrite: `git fetch origin`, then exit non-zero unless origin/<branch>
+#           descends from the head the steward's last status check cleared
+#           (.fidfab/reviews/pr-head, written by fidfab-pr-status) and is in HEAD, i.e. GitHub
+#           moved only by this checkout's commits (Fabro's checkpoints). Then write three lines
+#           to .fidfab/reviews/history-tree: the tree of HEAD (the code CI and reviewers saw),
+#           the current branch, and the commit origin/<branch> points to. The rewrite prompt
+#           reads the third line to tell Fabro's checkpoints from a push by someone else.
+#   verify  after the rewrite: `git fetch origin`, then exit non-zero unless HEAD is still on the
+#           recorded branch and both HEAD and origin/<branch> have the recorded tree. The
+#           rewrite agent holds the run's GitHub token and is told to force-push; its prompt
+#           keeps the tree, but only this check makes sure it did, also when the agent failed or
+#           timed out mid-way.
+#
+# Commits are compared by tree only, so moving, squashing and rewording pass; any change to
+# the code, including a file left in the work tree that Fabro's checkpoint then committed and
+# pushed, fails, and so does a branch that is no longer on GitHub (the fetch prunes).
+# The record lives in the sandbox the agent can write to: this catches mistakes and an
+# interrupted rewrite, not an agent that deliberately rewrites the record as well.
+set -euo pipefail
+file=.fidfab/reviews/history-tree
+cleared=.fidfab/reviews/pr-head
+tree() { git rev-parse --verify --quiet "$1^{tree}"; }
+fetch() { git fetch -q --prune origin || { echo "FAIL: git fetch origin failed, cannot check what GitHub holds" >&2; exit 1; }; }
+current_branch() {
+  local b; b="$(git branch --show-current)"
+  [[ -n "$b" ]] || { echo "FAIL: HEAD is detached, cannot tell which branch is pushed" >&2; exit 1; }
+  printf '%s\n' "$b"
+}
+published() { git rev-parse --verify --quiet "refs/remotes/origin/$1" >/dev/null; }
+
+case "${1:-}" in
+  record)
+    t="$(tree HEAD)" || { echo "fidfab-history-tree: HEAD has no tree" >&2; exit 1; }
+    branch="$(current_branch)"
+    fetch
+    ok="$(head -n1 "$cleared" 2>/dev/null || true)"
+    [[ -n "$ok" ]] || { echo "FAIL: no head from the steward's last status check ($cleared)" >&2; exit 1; }
+    published "$branch" || { echo "FAIL: origin/$branch is not on GitHub" >&2; exit 1; }
+    remote="$(git rev-parse "refs/remotes/origin/$branch")"
+    if ! git merge-base --is-ancestor "$ok" "$remote" 2>/dev/null || ! git merge-base --is-ancestor "$remote" HEAD; then
+      echo "FAIL: origin/$branch ($remote) moved since the steward cleared $ok other than by this checkout's commits" >&2
+      exit 1
+    fi
+    mkdir -p "$(dirname "$file")"
+    printf '%s\n%s\n%s\n' "$t" "$branch" "$remote" > "$file"
+    echo "history tree recorded: $t (branch $branch, $remote)"
+    ;;
+  verify)
+    [[ -s "$file" ]] || { echo "FAIL: no recorded tree ($file): the rewrite ran unchecked" >&2; exit 1; }
+    { read -r want; read -r branch; read -r remote; } < "$file" || true
+    [[ -n "$want" && -n "$branch" && "$remote" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] ||
+      { echo "FAIL: $file is incomplete, re-record before the rewrite" >&2; exit 1; }
+    status=0
+    now="$(current_branch)"
+    if [[ "$now" != "$branch" ]]; then
+      echo "FAIL: HEAD is on $now, the rewrite was recorded on $branch" >&2
+      status=1
+    fi
+    fetch
+    head_tree="$(tree HEAD || true)"
+    if [[ "$head_tree" != "$want" ]]; then
+      echo "FAIL: HEAD has tree ${head_tree:-none}, the reviewed tree was $want" >&2
+      git diff --stat "$want" HEAD >&2 || true
+      status=1
+    fi
+    if published "$branch"; then
+      remote_tree="$(tree "refs/remotes/origin/$branch" || true)"
+      if [[ "$remote_tree" != "$want" ]]; then
+        echo "FAIL: origin/$branch has tree ${remote_tree:-none}, the reviewed tree was $want" >&2
+        git diff --stat "$want" "refs/remotes/origin/$branch" >&2 || true
+        status=1
+      fi
+    else
+      echo "FAIL: origin/$branch was on GitHub before the rewrite and is gone now" >&2
+      status=1
+    fi
+    [[ $status -eq 0 ]] && echo "history tree unchanged: $want ($branch, HEAD and GitHub)"
+    exit $status
+    ;;
+  *) echo "usage: fidfab-history-tree record | verify" >&2; exit 2 ;;
+esac

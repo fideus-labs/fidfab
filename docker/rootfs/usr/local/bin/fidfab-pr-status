@@ -7,8 +7,12 @@
 # Prints a summary and every unresolved review thread (author, association, and the comment
 # text made inert by quote.jq), then a Fabro routing JSON object:
 #   {"preferred_next_label": "done" | "review" | "work" | "pending" | "no-pr", "context_updates": {...}}
+# context_updates.pr_status repeats the label, so a stage after the steward loop can tell how it
+# ended (logical-commits.fabro rewrites the history only after "done").
 # The same text goes to .fidfab/reviews/pr-status.md, the copy later steward stages read, and
 # the thread ids to .fidfab/reviews/pr-threads.json, which fidfab-pr-reply checks replies against.
+# The pull request's head commit goes to .fidfab/reviews/pr-head: fidfab-history-tree record
+# binds the history rewrite to the commit this check cleared.
 # In gated runs the thread text is listed only when the label is review (a human screens it).
 #
 #   done     no unresolved threads, no merge conflicts, every check concluded successfully
@@ -22,22 +26,24 @@ lib="$(dirname "$(readlink -f "$0")")/../lib/fidfab"
 out=.fidfab/reviews
 mkdir -p "$out"
 # Never leave an older listing behind (one the human may have rejected) for later stages.
-rm -f "$out/pr-status.md" "$out/pr-threads.json"
+rm -f "$out/pr-status.md" "$out/pr-threads.json" "$out/pr-head"
 
 branch="$(git rev-parse --abbrev-ref HEAD)"
-pr_json="$(gh pr view "$branch" --json number,url,mergeable,statusCheckRollup 2>/dev/null || true)"
+pr_json="$(gh pr view "$branch" --json number,url,mergeable,statusCheckRollup,headRefOid 2>/dev/null || true)"
 if [[ -z "$pr_json" ]]; then
   echo "No open pull request for branch $branch"
-  echo '{"preferred_next_label":"no-pr","context_updates":{"pr_open":false}}'
+  echo '{"preferred_next_label":"no-pr","context_updates":{"pr_status":"no-pr","pr_open":false}}'
   exit 0
 fi
 
 number="$(jq -r .number <<<"$pr_json")"
 url="$(jq -r .url <<<"$pr_json")"
 mergeable="$(jq -r .mergeable <<<"$pr_json")"          # MERGEABLE | CONFLICTING | UNKNOWN
+jq -r '.headRefOid // empty' <<<"$pr_json" > "$out/pr-head"
 checks_total="$(jq '[.statusCheckRollup[]?] | length' <<<"$pr_json")"
-checks_failed="$(jq '[.statusCheckRollup[]? | select((.conclusion // "") as $c | ($c|ascii_upcase) | IN("FAILURE","TIMED_OUT","CANCELLED","ACTION_REQUIRED","STARTUP_FAILURE","ERROR"))] | length' <<<"$pr_json")"
-checks_pending="$(jq '[.statusCheckRollup[]? | select((.status // "COMPLETED") != "COMPLETED" or ((.conclusion // "") == "" and (.state // "") == "PENDING"))] | length' <<<"$pr_json")"
+# Check runs carry status and conclusion; legacy commit statuses (StatusContext) only state.
+checks_failed="$(jq '[.statusCheckRollup[]? | select((.conclusion // .state // "") as $c | ($c|ascii_upcase) | IN("FAILURE","TIMED_OUT","CANCELLED","ACTION_REQUIRED","STARTUP_FAILURE","ERROR"))] | length' <<<"$pr_json")"
+checks_pending="$(jq '[.statusCheckRollup[]? | select((.status // "COMPLETED") != "COMPLETED" or ((.conclusion // "") == "" and ((.state // "")|ascii_upcase|IN("PENDING","EXPECTED"))))] | length' <<<"$pr_json")"
 
 repo="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 owner="${repo%%/*}"; name="${repo##*/}"
@@ -127,4 +133,4 @@ cat "$out/pr-status.md"
 jq -nc --arg l "$label" --argjson n "$number" --arg u "$url" --arg m "$mergeable" \
   --argjson ur "$unresolved" --argjson aw "$awaiting" --argjson cf "$checks_failed" \
   --argjson cp "$checks_pending" --argjson g "$gated" \
-  '{preferred_next_label:$l, context_updates:{pr_open:true, pr_number:$n, pr_url:$u, mergeable:$m, unresolved_threads:$ur, awaiting_threads:$aw, checks_failed:$cf, checks_pending:$cp, steward_gate:$g}}'
+  '{preferred_next_label:$l, context_updates:{pr_status:$l, pr_open:true, pr_number:$n, pr_url:$u, mergeable:$m, unresolved_threads:$ur, awaiting_threads:$aw, checks_failed:$cf, checks_pending:$cp, steward_gate:$g}}'

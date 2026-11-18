@@ -1,7 +1,8 @@
 // fidfab: small development implementation
 //
 // One-shot prompt → Claude Code (fable) implements with a lightweight
-// planning-with-files record → verification pipeline → PR → steward loop.
+// planning-with-files record → verification pipeline → PR → steward loop →
+// history rewritten into logical commits.
 //
 // The verification pipeline is spelled out explicitly (one import per stage)
 // so the whole process is readable here and each component stays reusable.
@@ -27,12 +28,13 @@ digraph FidfabSmall {
   personal   [import="components/personal-data-audit.fabro"]
   ship       [import="components/commit-and-pr.fabro"]
   steward    [import="components/pr-steward.fabro"]
+  history    [import="components/logical-commits.fabro"]
   done       [shape=diamond, label="Done"]
 
   start -> bootstrap -> implement -> has_changes
   has_changes -> coverage [label="has-changes"]
   has_changes -> done     [label="no-changes"]
   coverage -> coderabbit -> codex -> carbon -> claude -> security -> carbon_security
-  carbon_security -> personal -> ship -> steward -> done
+  carbon_security -> personal -> ship -> steward -> history -> done
   done -> exit
 }
