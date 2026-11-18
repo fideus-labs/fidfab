@@ -19,3 +19,9 @@
   `test-setup.sh`, `shellcheck -S warning`, `node --check tests/acp-smoke.mjs`. Not run:
   `docker/build.sh && tests/test-image.sh` (no Docker daemon in the sandbox), and a complete
   workflow run.
+- 2026-11-18: Claude review addressed: the rewrite component checks `fidfab-pr-status`
+  first and runs the agent only on `done` (the lint enforces it); the prompt folds with
+  `fixup`, checks message bodies, and recovers from an interrupted `git reset --soft`;
+  README and `workflow.toml` state that unpushed work lives only in the sandbox and
+  recommend `--preserve-sandbox`; the CI follow-up for `test-history-rewrite.sh` is noted in
+  the task plan. Graphs re-rendered: unchanged, as they draw each import as one node.

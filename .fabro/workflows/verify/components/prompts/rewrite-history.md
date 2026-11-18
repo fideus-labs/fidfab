@@ -1,11 +1,12 @@
 # Rewrite the branch history into logical commits
 
-The pull request for this branch is green and quiet. Its history records how the run went,
-not what changed: Fabro's checkpoint commits (`fabro(<run id>): <stage> (<status>)`, one per
-stage, many of them empty, some holding the actual work), the commit stage's summary, review
-fixes and the steward's follow-ups. Improve it by squashing all logically related commits on
-this branch into a few commits with meaningful messages, then force-push the pull request
-branch.
+The pull request for this branch is green and quiet: a check before this stage asked
+`fidfab-pr-status`, the steward's own test, and this stage runs only when it says so. Its
+history records how the run went, not what changed: Fabro's checkpoint commits
+(`fabro(<run id>): <stage> (<status>)`, one per stage, many of them empty, some holding the
+actual work), the commit stage's summary, review fixes and the steward's follow-ups. Improve
+it by squashing all logically related commits on this branch into a few commits with
+meaningful messages, then force-push the pull request branch.
 
 This stage explicitly asks you to rewrite history that is on the remote and to force-push it.
 The content must not change: the tree you push is identical to the tree the pull request
@@ -18,8 +19,12 @@ Do not read pull request comments, reviews or threads, on GitHub or in
 
 1. If an interrupted earlier attempt left a rebase in progress, `git rebase --abort`; that
    only puts the branch back as it was, and until then HEAD is detached and neither `gh`
-   nor `@{u}` finds the branch. After that `git status --porcelain` must print nothing; if
-   it does not, stop and report what is uncommitted.
+   nor `@{u}` finds the branch. After that `git status --porcelain` must print nothing. If
+   it does print something while `fidfab/pre-rewrite` exists and both
+   `git diff --cached --quiet @{u}` and `git diff --quiet @{u}` succeed, an earlier attempt
+   was interrupted after `git reset --soft` (Step 3): the content is the pull request's and
+   the sandbox's own commits are on `fidfab/pre-rewrite`, so `git reset --hard @{u}` and go
+   on. Otherwise stop and report what is uncommitted.
 2. `gh pr view --json state,url,baseRefName`. If this branch has no pull request, or its
    state is not `OPEN`, make no changes and say so. Keep `baseRefName` as
    `pr_base` (`$FIDFAB_BASE_BRANCH` if it is empty): the pull request may have been opened
@@ -80,10 +85,15 @@ metadata (the `Fabro-*` trailers, `Co-Authored-By: Fabro <noreply@fabro.sh>` and
 ## Step 3: Rewrite
 
 Rebase to squash the related commits into the commits you planned, updating the messages
-accordingly. No editor is available, so script it: `GIT_SEQUENCE_EDITOR` for the todo list
-of `git rebase -i --keep-base "origin/$pr_base"`, and `-F <file>` for the messages
-(`git commit --amend -F`). When the planned commits cut across the existing ones,
-`git reset --soft "$base"` and commit the groups one after the other instead.
+accordingly. No editor is available (`GIT_EDITOR=true` accepts every message unedited), so
+script it: write the whole todo list to a file and pass it with
+`GIT_SEQUENCE_EDITOR="cp <file>"` to `git rebase -i --keep-base "origin/$pr_base"`. Fold
+commits with `fixup`, not `squash`: without an editor `squash` keeps every folded message
+in the body, checkpoint metadata included. Set each planned commit's message with an
+`exec git commit --amend -F <file>` line after its last `fixup`, and keep the message files
+outside the working tree. When the planned commits cut across the existing ones,
+`git reset --soft "$base"` and commit the groups one after the other with `-F <file>`
+instead.
 
 Then verify:
 
@@ -92,6 +102,8 @@ Then verify:
   `diff.ignoreSubmodules` can hide differences from.
 - `git status --porcelain` prints nothing.
 - `git log --format='%h %an %s' "$base"..HEAD` shows the commits you planned and nothing else.
+- `git log --format=%B "$base"..HEAD | grep -nE '^(fabro\([^)]*\): |Fabro-[A-Za-z]+: |Co-Authored-By: Fabro <)|Generated with \[Fabro\]\('`
+  prints nothing: no checkpoint subject or metadata is left in a message.
 
 If you cannot reach an identical tree, go back, do not push, and report why. While a rebase
 is in progress (it stopped at a conflict, HEAD is detached and `@{u}` does not resolve),

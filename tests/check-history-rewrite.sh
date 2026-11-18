@@ -5,14 +5,17 @@
 # For every .fabro/workflows/<name>/:
 #   - a workflow that imports components/pr-steward.fabro also imports
 #     components/rewrite-history.fabro; that node is the steward's only successor and has
-#     no other predecessor, so the rewrite runs once the pull request is green and quiet
-#     and not on a path that opened none;
+#     no other predecessor, so the rewrite runs after the steward and not on a path that
+#     opened no pull request;
 #   - a workflow that imports the rewrite sets `[run.run_branch] push = false` in
 #     workflow.toml. Otherwise Fabro pushes its checkpoint commits, the ones made after the
 #     rewrite included, on top of the rewritten history.
 # The component's one agent node is Claude opus at medium effort with fidelity="truncate"
-# (earlier stage output, such as review-thread listings, stays out of its preamble), and
-# its prompt force-pushes only with --force-with-lease --force-if-includes.
+# (earlier stage output, such as review-thread listings, stays out of its preamble), is
+# entered only through the "done" edge of a script node that runs fidfab-pr-status (the
+# steward also ends with no pull request and after a failed reply preview; the rewrite
+# runs only once the pull request is green and quiet), and its prompt force-pushes only
+# with --force-with-lease --force-if-includes.
 # Offline; no fabro needed.
 #
 # Usage: tests/check-history-rewrite.sh [repo-root]   (default: this repository)
@@ -79,6 +82,28 @@ edges() {
   ' "$1"
 }
 
+# edge_labels <dot file> <from> <to>: "label=<its label>" for every edge statement
+# "<from> -> <to> [...]", one line each ("label=" for an edge without one, a line that
+# command substitution does not drop).
+# shortcut: an edge in a chain (a -> b -> c) is not matched, so a lint that needs every edge
+# into a node to carry a label fails on a chain rather than passing it.
+edge_labels() {
+  awk -v from="$2" -v to="$3" "$awk_code"'
+    { s = code($0); u = unquoted(s) }
+    u ~ /->/ {
+      gsub(/\[[^]]*\]/, "", u)
+      if (split(u, part, /->/) != 2) next
+      for (i = 1; i <= 2; i++) gsub(/[[:space:];]/, "", part[i])
+      if (part[1] != from || part[2] != to) next
+      label = ""
+      if (match(s, /[[:space:],[]label="[^"]*"/)) {
+        label = substr(s, RSTART + 1, RLENGTH - 1); sub(/^label="/, "", label); sub(/"$/, "", label)
+      }
+      print "label=" label
+    }
+  ' "$1"
+}
+
 # imports <dot file> <component>: the nodes that import it, one per line.
 imports() { nodes "$1" | awk -v want="import=\"$2\"" 'index($0, want) { print $1 }'; }
 
@@ -135,6 +160,17 @@ if [[ -f "$rewrite" ]]; then
       || fail "$rewrite" "'$node' must run 'fidfab-claude-acp --model opus --effort medium' over ACP"
     [[ "$agents" == *'fidelity="truncate"'* ]] \
       || fail "$rewrite" "'$node' must set fidelity=\"truncate\": the default preamble carries earlier stage output"
+    # The steward also ends with no pull request and after a failed reply preview, threads
+    # still awaiting replies; fidfab-pr-status says "done" only when the PR is green and quiet.
+    prev="$(edges "$rewrite" | awk -v n="$node" '$2 == n { print $1 }' | sort -u)"
+    [[ -n "$prev" ]] || fail "$rewrite" "'$node' is not reached by any edge"
+    for p in $prev; do
+      gate="$(nodes "$rewrite" | awk -v n="$p" '$1 == n')"
+      labels="$(edge_labels "$rewrite" "$p" "$node")"
+      if [[ "$gate" != *'script="'*fidfab-pr-status* || -z "$labels" ]] || grep -qvx label=done <<<"$labels"; then
+        fail "$rewrite" "'$node' must be entered only through the \"done\" edge of a script node running fidfab-pr-status, not from '$p'"
+      fi
+    done
     prompt="$(sed -nE 's/.*[[:space:],[]prompt="@([^"]*)".*/\1/p' <<<"$agents")"
     if [[ -z "$prompt" || ! -f "components/$prompt" ]]; then
       fail "$rewrite" "'$node' needs a prompt file under components/ (prompt=\"@${prompt:-...}\")"

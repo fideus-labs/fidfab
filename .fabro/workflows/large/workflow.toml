@@ -90,7 +90,9 @@ enabled = true
 # commits. With push = false the checkpoints stay in the sandbox and only the stages' own
 # pushes reach GitHub: the pull request stage, the steward, and last the history rewrite,
 # which force-pushes the branch as a few logical commits. The cost: `fabro rewind` and
-# `fabro fork` fetch checkpoints from origin and need push = true; `fabro resume` works
-# from the sandbox while it exists.
+# `fabro fork` fetch checkpoints from origin and need push = true, and work that no stage
+# has pushed yet exists only in the sandbox, which the fidfab environment does not
+# preserve. A run that fails before the pull request stage leaves nothing on GitHub; pass
+# --preserve-sandbox to keep the sandbox for `fabro resume` (README, Pull request history).
 [run.run_branch]
 push = false

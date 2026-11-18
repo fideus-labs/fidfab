@@ -52,6 +52,23 @@
   someone else, the reset to `@{u}`, both ways of rebuilding the commits with an identical
   tree, an interrupted attempt followed by a restart, the push with both options, and the
   rejections (`stale info`, `remote ref updated since checkout`).
+- The steward's `done` has three entries: `status` says `done` (green and quiet), `status`
+  says `no-pr`, and a failed reply preview, which leaves threads awaiting replies. The
+  component therefore starts with a script node, `fidfab-pr-status | tail -n 1` under
+  `bash -o pipefail`, and the agent runs only on its `done` label. The tail keeps only the
+  routing line, not the listing before it, which can quote threads. pipefail lets a failed
+  status call fail the node, so it is retried and then takes the failure edge past the
+  rewrite.
+- `GIT_EDITOR=true` in the sandbox: a `squash` in a scripted todo list keeps the folded
+  messages, checkpoint subject and `Fabro-*` trailers included, in the body (rehearsed with
+  git 2.53); `fixup` drops them. The prompt asks for `fixup` with
+  `exec git commit --amend -F <file>`, and checks the message bodies, not only the subjects.
+  The todo list in git 2.53 reads `pick <hash> # <subject>`, so the prompt passes a whole
+  todo file (`GIT_SEQUENCE_EDITOR="cp <file>"`) instead of editing it with a pattern.
+- With `push = false` nothing reaches GitHub until the pull request stage pushes. Resume
+  "requires the original workspace to survive" (docs.fabro.sh, execution/checkpoints), and
+  the `fidfab` environment is `preserve = false`, so a run that fails earlier is lost unless
+  it was started with `--preserve-sandbox`; `fabro retry` starts it again from the beginning.
 - The force-push starts CI again on the same content and, where branch protection dismisses
   stale approvals, drops approvals. Nothing watches that CI run: the steward has finished.
 - `tests/check-history-rewrite.sh` is run by `tests/validate-workflows.sh`, which CI already

@@ -14,11 +14,15 @@ scratch() {
 digraph RewriteHistory {
   start [shape=Mdiamond]
   exit  [shape=Msquare]
+  check [script="bash -o pipefail -c 'fidfab-pr-status | tail -n 1'", output_schema="routing"]
   rewrite [label="Rewrite history", class="claude opus git",
            backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
            prompt="@prompts/rewrite-history.md", fidelity="truncate"]
   done [shape=diamond]
-  start -> rewrite -> done -> exit
+  start -> check
+  check -> rewrite [label="done"]
+  check -> done
+  rewrite -> done -> exit
 }
 DOT
   echo 'Push with `git push --force-with-lease --force-if-includes`, never with a plain `--force`.' \
@@ -117,6 +121,17 @@ check "Codex instead of Claude" fail "must run 'fidfab-claude-acp --model opus -
 check "default fidelity" fail 'must set fidelity="truncate"' <<<'perl -pi -e "s|, fidelity=\"truncate\"||" $comp'
 check "fidelity only in a comment" fail 'must set fidelity="truncate"' <<<'perl -pi -e "s|, fidelity=\"truncate\"\]|]  // fidelity=\"truncate\"|" $comp'
 check "two agent nodes" fail "expected exactly one agent node" <<<'perl -pi -e "s|^  done \[shape=diamond\]|  extra [backend=\"acp\", acp.command=\"fidfab-claude-acp --model opus --effort medium\", prompt=\"\@prompts/rewrite-history.md\"]\n\$&|" $comp'
+check "gate edge with spaces around =" pass <<<'perl -pi -e "s|\[label=\"done\"\]|[ label = \"done\" ]|" $comp'
+check "rewrite entered from start, no gate" fail "not from 'start'" <<<'perl -pi -e "s|^  start -> check|  start -> rewrite|" $comp'
+check "gate edge without a label" fail "not from 'check'" <<<'perl -pi -e "s|check -> rewrite \[label=\"done\"\]|check -> rewrite|" $comp'
+check "gate edge on another label" fail "not from 'check'" <<<'perl -pi -e "s|label=\"done\"|label=\"pending\"|" $comp'
+check "gate's fallback also to the rewrite" fail "not from 'check'" <<<'perl -pi -e "s|^  check -> done|  check -> rewrite|" $comp'
+check "gate edge in a chain" fail "not from 'check'" <<'EDIT'
+perl -pi -e '$_ = "" if /^  check -> rewrite/; s|^  start -> check|  start -> check -> rewrite [label="done"]|' $comp
+EDIT
+check "gate that is not fidfab-pr-status" fail "not from 'check'" <<<'perl -pi -e "s|fidfab-pr-status \| tail -n 1|true|" $comp'
+check "fidfab-pr-status only in a comment" fail "not from 'check'" <<<'perl -pi -e "s|fidfab-pr-status \| tail -n 1|true|; s|^  check -> done|  check -> done  // script=\"fidfab-pr-status\"|" $comp'
+check "rewrite not reached" fail "'rewrite' is not reached" <<<'perl -pi -e "\$_ = \"\" if /^  check -> rewrite/; s|^  rewrite -> done -> exit|  done -> exit|" $comp'
 check "component missing" fail "imported by a workflow but missing" <<<'rm $comp'
 check "prompt file missing" fail "needs a prompt file" <<<'rm $prompt'
 check "prompt without a lease" fail "must push with 'git push --force-with-lease --force-if-includes'" <<<'echo "Push with git push." > $prompt'

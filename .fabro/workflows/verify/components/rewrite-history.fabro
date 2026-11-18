@@ -1,9 +1,14 @@
 // Component: rewrite-history
-// Runs after the PR steward, once the pull request is green and quiet. Claude (opus)
-// regroups the branch's commits (Fabro's per-stage checkpoint commits, the commit
-// stage's summary, review fixes, the steward's follow-ups) into logically related
-// commits with meaningful messages and force-pushes the pull request branch. The
-// content of the branch does not change.
+// Runs after the PR steward. Claude (opus) regroups the branch's commits (Fabro's
+// per-stage checkpoint commits, the commit stage's summary, review fixes, the steward's
+// follow-ups) into logically related commits with meaningful messages and force-pushes
+// the pull request branch. The content of the branch does not change.
+//
+// The steward also ends when there is no pull request and when a reply preview fails,
+// which leaves threads awaiting replies. check asks fidfab-pr-status again and the
+// rewrite runs only on "done": the pull request is open, green and quiet, the condition
+// the steward loops for. Anything else, a failed check included, skips it. Only the
+// routing line of the output is kept: the listing before it can quote review threads.
 //
 // The importing workflow must set `[run.run_branch] push = false` in workflow.toml.
 // Fabro then keeps its checkpoint commits in the sandbox, so only what the stages push
@@ -17,10 +22,16 @@ digraph RewriteHistory {
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]
 
+  check   [label="PR green & quiet?", script="bash -o pipefail -c 'fidfab-pr-status | tail -n 1'",
+           output_schema="routing", retry_policy="linear"]
   rewrite [label="Rewrite history (Claude opus)", class="claude opus git",
            backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
            prompt="@prompts/rewrite-history.md", fidelity="truncate"]
-  done    [shape=diamond, label="History rewritten"]
+  done    [shape=diamond, label="History rewritten or skipped"]
 
-  start -> rewrite -> done -> exit
+  start   -> check
+  check   -> rewrite [label="done"]
+  check   -> done    [condition="outcome=failed"]
+  check   -> done
+  rewrite -> done -> exit
 }

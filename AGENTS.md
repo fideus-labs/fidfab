@@ -37,7 +37,8 @@ a Docker sandbox image and tests. Keep the following in mind.
   `workflow.toml`, `components/rewrite-history.fabro`, its prompt or
   `tests/check-history-rewrite.sh` (`validate-workflows.sh` runs the check too). In every
   workflow the history rewrite is the steward's only successor, and
-  `[run.run_branch] push = false` is set.
+  `[run.run_branch] push = false` is set. Inside the component the agent is entered only
+  through the `done` edge of a `fidfab-pr-status` check.
 - `tests/test-codex-model.sh` must pass after any change to `fidfab-codex-acp` or
   `docker/config/codex-config.toml`.
 - `tests/test-pr-steward.sh` must pass after any change to `fidfab-pr-status`,
@@ -73,7 +74,8 @@ a Docker sandbox image and tests. Keep the following in mind.
   `[run.run_branch] push = false`, Fabro also pushes the branch after each checkpoint, and
   that branch is the pull request branch. The workflows set it to `false` so that only stage
   pushes reach GitHub and the history rewrite is the last one; `fabro rewind` and
-  `fabro fork` then cannot fetch checkpoints from origin.
+  `fabro fork` then cannot fetch checkpoints from origin, and work that no stage has pushed
+  exists only in the sandbox (kept after the run only with `--preserve-sandbox`).
 - An agent node's default preamble (`fidelity="compact"`) includes the scripts earlier stages
   ran and their output. A node that must not see review-thread listings, such as any agent
   after `fidfab-pr-status`, sets `fidelity="truncate"` (goal and run id only).
