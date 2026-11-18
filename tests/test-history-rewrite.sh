@@ -144,6 +144,10 @@ check "prompt file missing" fail "needs a prompt file" <<<'rm $prompt'
 check "prompt with a lease" fail "must not force-push" <<<'echo "Then run \`git push --force-with-lease --force-if-includes\`." >> $prompt'
 check "prompt with a plain --force" fail "must not force-push" <<<'echo "Or run \`git push --force\`." >> $prompt'
 check "prompt with push -f to a remote" fail "must not force-push" <<<'echo "Or run git push origin HEAD -f" >> $prompt'
+check "prompt with a +refspec push" fail "must not force-push" <<<'echo "Or run \`git push origin +HEAD\`." >> $prompt'
+check "fidfab-pr-status only in another attribute" fail "not from 'check'" <<<'perl -pi -e "s|script=\"bash -o pipefail -c .fidfab-pr-status \| tail -n 1.\"|script=\"true\", label=\"fidfab-pr-status\"|" $comp'
+check "gate without routing" fail 'must set output_schema="routing"' <<<'perl -pi -e "s|, output_schema=\"routing\"||" $comp'
+check "fidfab-rewrite-push only in another attribute" fail "must be followed by a script node running fidfab-rewrite-push" <<<'perl -pi -e "s|script=\"fidfab-rewrite-push\"|script=\"true\", label=\"fidfab-rewrite-push\"|" $comp'
 
 if "$repo/tests/check-history-rewrite.sh"; then echo "ok   repository workflows"
 else echo "FAIL repository workflows"; fail=1; fi

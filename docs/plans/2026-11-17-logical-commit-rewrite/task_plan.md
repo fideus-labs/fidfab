@@ -60,10 +60,9 @@ Run the repository checks listed in AGENTS.md.
 All met. Not verified here: a complete workflow run (needs Docker and the agent
 subscriptions), so the rewrite stage itself has not run; its git commands were rehearsed in
 scratch repositories and the `push = false` setting was read back from a server-created run.
-`.github/workflows/ci.yml` is unchanged (the push token lacks the `workflow` scope); the lint
-runs in CI through `tests/validate-workflows.sh`.
+`.github/workflows/ci.yml` is unchanged (the push token lacks the `workflow` scope); the lint,
+its self-test `tests/test-history-rewrite.sh` and `tests/test-rewrite-push.sh` run in CI
+through `tests/validate-workflows.sh`.
 
-Follow-up for a maintainer: add `tests/test-history-rewrite.sh`, the lint's self-test, to
-`.github/workflows/ci.yml`. Until then CI would not notice a change that makes the lint pass
-vacuously. `tests/test-model-aliases.sh` and `tests/test-effort-levels.sh` are not in CI
-either.
+Follow-up for a maintainer: `tests/test-model-aliases.sh` and `tests/test-effort-levels.sh`
+are not in CI.

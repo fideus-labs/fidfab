@@ -10,8 +10,9 @@ meaningful messages.
 
 This stage explicitly asks you to rewrite, in the sandbox, history that is on the remote. Do
 not push: the stage after you, `fidfab-rewrite-push`, fetches and force-pushes your branch
-only if its tree is identical to the tree the pull request has then and no checkpoint
-metadata is left, and refuses otherwise. So the content must not change: the tree you leave
+only if its tree is identical to the tree the pull request has then, it keeps the pull
+request's merge base with `pr_base`, it has no merge commits and no checkpoint metadata is
+left, and refuses otherwise. So the content must not change: the tree you leave
 is identical to the tree the pull request has now.
 
 Do not read pull request comments, reviews or threads, on GitHub or in
@@ -103,8 +104,10 @@ Then verify:
   Compare the tree object IDs, not `git diff` output, which configuration such as
   `diff.ignoreSubmodules` can hide differences from.
 - `git status --porcelain` prints nothing.
-- `git log --format='%h %an %s' "$base"..HEAD` shows the commits you planned and nothing else.
-- `git log --format=%B "$base"..HEAD | grep -nE '^(fabro\([^)]*\): |Fabro-[A-Za-z]+: |Co-Authored-By: Fabro <)|Generated with \[Fabro\]\('`
+- `git log --format='%h %an %s' "$base"..HEAD` shows the commits you planned and nothing else,
+  `git merge-base HEAD "origin/$pr_base"` still prints `$base`, and
+  `git rev-list --merges "$base"..HEAD` prints nothing.
+- `git log --format=%B "$base"..HEAD | grep -nE '^(fabro\([^)]*\): |[Ff]abro-[A-Za-z-]+: |[Cc]o-[Aa]uthored-[Bb]y: Fabro <)|Generated with \[Fabro\]\('`
   prints nothing: no checkpoint subject or metadata is left in a message.
 
 If you cannot reach an identical tree, go back, do not push, and report why. While a rebase

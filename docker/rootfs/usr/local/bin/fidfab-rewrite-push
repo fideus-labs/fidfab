@@ -5,51 +5,104 @@
 #
 # The agent regroups the commits of the current branch locally and does not push. This
 # script, a command node after it, pushes the result only when the content is that of the
-# pull request:
+# pull request and the history still sits on the pull request's base:
 #   - no rebase, merge or cherry-pick in progress, HEAD on a branch, a clean working tree;
+#   - the branch is the run branch fidfab-bootstrap recorded (FIDFAB_BRANCH in
+#     .fidfab/run.env, read without sourcing it), when it recorded one;
 #   - the upstream is origin/<current branch> (set by the pull request stage);
-#   - after `git fetch origin`, HEAD's tree is the upstream's tree, object ID for object ID;
-#   - no commit to push carries a Fabro checkpoint subject or Fabro's checkpoint metadata.
-# Then it force-pushes HEAD with a lease on the exact upstream commit it compared against,
-# so a push someone makes after the fetch is not overwritten. HEAD equal to the upstream
-# (the agent made no changes or went back) is a successful no-op.
+#   - with a GitHub token (GH_TOKEN or GITHUB_TOKEN), the branch is the head of an open pull
+#     request, whose base branch is the base; without one (scratch tests) the base is
+#     FIDFAB_BASE_BRANCH from .fidfab/run.env, else main;
+#   - after fetching the branch and the base, the tree of what is pushed is the upstream's
+#     tree, object ID for object ID;
+#   - its merge base with the base branch is the upstream's, so it neither drops base-branch
+#     commits nor brings in newer ones, and it has no merge commits above that base;
+#   - no commit above that base carries a Fabro checkpoint subject or checkpoint metadata.
+# What is pushed is HEAD without the empty checkpoint commits Fabro adds on top of it after
+# each stage (the agent's own stage included) that are not on the pull request yet.
+# It force-pushes with a lease on the exact upstream commit it compared against, so a push
+# someone makes after the fetch is not overwritten. Nothing new to push (the agent made no
+# changes or went back) is a successful no-op. Hooks of the workspace are not run.
 #
 # Exit status: 0 pushed or nothing to push; 1 refused or the push failed (stderr says why).
 set -euo pipefail
 die() { echo "fidfab-rewrite-push: $*" >&2; exit 1; }
+# An agent wrote this workspace: do not run its hooks in the credentialed fetch and push.
+g() { git -c core.hooksPath=/dev/null "$@"; }
+# run_env KEY: a value fidfab-bootstrap recorded, read as text (the file is not trusted code).
+run_env() { [[ -f .fidfab/run.env ]] && sed -n "s/^$1=//p" .fidfab/run.env | tail -n 1; return 0; }
+checkpoint='^(fabro\([^)]*\): |[Ff]abro-[A-Za-z-]+: |[Cc]o-[Aa]uthored-[Bb]y: Fabro <)|Generated with \[Fabro\]\('
 
 gitdir="$(git rev-parse --git-dir)"
 for state in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; do
   [[ ! -e "$gitdir/$state" ]] || die "a rebase, merge or cherry-pick is in progress ($state); refusing to push"
 done
 branch="$(git symbolic-ref -q --short HEAD)" || die "HEAD is detached; refusing to push"
+run_branch="$(run_env FIDFAB_BRANCH)"
+[[ -z "$run_branch" || "$branch" == "$run_branch" ]] \
+  || die "HEAD is on '$branch', not on the run branch '$run_branch'; refusing to push"
 [[ -z "$(git status --porcelain)" ]] || die "the working tree has uncommitted changes; refusing to push"
 upstream="$(git rev-parse -q --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)" \
   || die "branch '$branch' has no upstream (no pull request was pushed); nothing to push"
 [[ "$upstream" == "origin/$branch" ]] \
   || die "the upstream of '$branch' is '$upstream', expected 'origin/$branch'; refusing to push"
 
-git fetch -q origin "+refs/heads/$branch:refs/remotes/origin/$branch" \
-  || die "git fetch origin $branch failed"
-head="$(git rev-parse HEAD)"
+if [[ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]]; then
+  pr="$(gh pr view "$branch" --json state,headRefName,baseRefName \
+        --jq '[.state, .headRefName, .baseRefName] | @tsv' 2>/dev/null)" \
+    || die "no pull request found for '$branch'; refusing to push"
+  IFS=$'\t' read -r state head_ref pr_base <<<"$pr"
+  [[ "$state" == OPEN && "$head_ref" == "$branch" ]] \
+    || die "the pull request for '$branch' is not open with '$branch' as its head ($state, $head_ref); refusing to push"
+else
+  pr_base="$(run_env FIDFAB_BASE_BRANCH)"
+  pr_base="${pr_base:-main}"
+fi
+git check-ref-format --branch "$pr_base" >/dev/null 2>&1 && [[ "$pr_base" != "$branch" ]] \
+  || die "unusable base branch '$pr_base'; refusing to push"
+
+g fetch -q origin "+refs/heads/$branch:refs/remotes/origin/$branch" \
+  "+refs/heads/$pr_base:refs/remotes/origin/$pr_base" \
+  || die "git fetch origin $branch $pr_base failed"
 remote="$(git rev-parse "refs/remotes/origin/$branch")"
-if [[ "$head" == "$remote" ]]; then
+
+# Fabro commits a checkpoint after every node, an empty one when the stage left nothing
+# uncommitted. Leave out those it added above the agent's last commit.
+tip="$(git rev-parse HEAD)"
+while ! git merge-base --is-ancestor "$tip" "$remote" \
+  && [[ "$(git log -1 --format=%P "$tip" | wc -w)" == 1 ]] \
+  && git log -1 --format=%s "$tip" | grep -qE '^fabro\([^)]*\): ' \
+  && [[ "$(git rev-parse "$tip^{tree}")" == "$(git rev-parse "$tip^^{tree}")" ]]; do
+  tip="$(git rev-parse "$tip^")"
+done
+if git merge-base --is-ancestor "$tip" "$remote"; then
+  [[ "$tip" == "$remote" ]] \
+    || die "HEAD is behind origin/$branch (it would drop commits of the pull request); refusing to push"
   echo "fidfab-rewrite-push: '$branch' is the pull request branch as it is; nothing to push"
   exit 0
 fi
 
-head_tree="$(git rev-parse 'HEAD^{tree}')"
+tip_tree="$(git rev-parse "$tip^{tree}")"
 remote_tree="$(git rev-parse "$remote^{tree}")"
-[[ "$head_tree" == "$remote_tree" ]] \
-  || die "the tree of HEAD ($head_tree) differs from the tree of origin/$branch ($remote_tree): the rewrite changed the content, or someone pushed after it started; refusing to push"
+[[ "$tip_tree" == "$remote_tree" ]] \
+  || die "the tree of the rewritten branch ($tip_tree) differs from the tree of origin/$branch ($remote_tree): the rewrite changed the content, or someone pushed after it started; refusing to push"
+
+# The tree alone does not fix what a merge brings in: that depends on the merge base.
+base="$(git merge-base "$remote" "origin/$pr_base")" \
+  || die "origin/$branch has no merge base with origin/$pr_base; refusing to push"
+tip_base="$(git merge-base "$tip" "origin/$pr_base")" \
+  || die "the rewritten branch has no merge base with origin/$pr_base; refusing to push"
+[[ "$tip_base" == "$base" ]] \
+  || die "the rewritten branch is based on ${tip_base:0:12} of origin/$pr_base, the pull request on ${base:0:12}; refusing to push"
+[[ -z "$(git rev-list --merges "$base..$tip")" ]] \
+  || die "the rewritten branch has merge commits above its base; refusing to push"
 
 # The same patterns the agent's prompt checks for, here enforced on what goes out.
-if git log --format=%B "$remote..HEAD" \
-  | grep -nE '^(fabro\([^)]*\): |Fabro-[A-Za-z]+: |Co-Authored-By: Fabro <)|Generated with \[Fabro\]\(' >&2; then
+if git log --format=%B "$base..$tip" | grep -nE "$checkpoint" >&2; then
   die "commits to push still carry Fabro checkpoint subjects or metadata (above); refusing to push"
 fi
 
-git push --force-with-lease="refs/heads/$branch:$remote" origin "HEAD:refs/heads/$branch" \
+g push --force-with-lease="refs/heads/$branch:$remote" origin "$tip:refs/heads/$branch" \
   || die "git push failed (a push to origin/$branch after the fetch is refused by the lease)"
-echo "fidfab-rewrite-push: pushed $(git rev-list --count "$remote..HEAD") rewritten commit(s) to origin/$branch"
-git log --oneline "$remote..HEAD"
+echo "fidfab-rewrite-push: pushed $(git rev-list --count "$base..$tip") rewritten commit(s) to origin/$branch"
+git log --oneline "$base..$tip"

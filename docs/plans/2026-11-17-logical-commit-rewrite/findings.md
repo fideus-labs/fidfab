@@ -73,7 +73,8 @@
   stale approvals, drops approvals. Nothing watches that CI run: the steward has finished.
 - `tests/check-history-rewrite.sh` is run by `tests/validate-workflows.sh`, which CI already
   runs. `.github/workflows/ci.yml` is unchanged: the run's push token lacks the `workflow`
-  scope (see PR #15), so a maintainer has to add `tests/test-history-rewrite.sh` there.
+  scope (see PR #15), so `validate-workflows.sh` also runs `tests/test-history-rewrite.sh`
+  and `tests/test-rewrite-push.sh`.
 - Graphs: `fabro graph` needs a server with a ready LLM provider. In the sandbox:
   `fabro install --non-interactive --skip-llm --github-strategy token --github-username <login>`,
   a placeholder `LITELLM_API_KEY` secret, `scripts/setup.sh litellm`, then

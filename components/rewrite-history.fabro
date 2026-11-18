@@ -5,10 +5,14 @@
 // branch does not change.
 //
 // The agent does not push. push, a command node, runs fidfab-rewrite-push: it fetches and
-// force-pushes, with a lease, only if HEAD's tree is the pull request's tree and no
+// force-pushes, with a lease, only if the tree is the pull request's tree, the merge base
+// with the pull request's base branch is unchanged, there are no merge commits and no
 // checkpoint metadata is left. The agent reads commit messages and files that run agents
-// and anyone with push access wrote; an instruction planted there, or a plain mistake,
-// cannot push content no human approved past that check. A failed push skips to done.
+// and anyone with push access wrote; a plain mistake, or an instruction planted there that
+// the agent follows through git, is stopped by that check. It is not a hard boundary: every
+// stage runs as root in one sandbox, and the run's GitHub token can be read there (the
+// sandbox driver passes it on its command line), so an agent set on it can push past the
+// check. A failed push skips to done.
 //
 // The steward also ends when there is no pull request and when a reply preview fails,
 // which leaves threads awaiting replies. check asks fidfab-pr-status again and the

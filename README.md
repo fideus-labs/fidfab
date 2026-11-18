@@ -443,12 +443,17 @@ order the run happened to go. Two things turn that into a history worth reading:
   request and keeps the merge base, and it does not push. A command node then runs
   `fidfab-rewrite-push`, which fetches the pull request branch and force-pushes the
   rewritten one only if its tree is identical, object ID for object ID, to the one the pull
-  request has, and no checkpoint subject or metadata is left; the lease is on the exact
-  commit it compared against, so it does not overwrite a push someone made meanwhile. The
-  content that was reviewed and tested therefore does not change, even if the agent errs
-  or follows an instruction planted in a commit message or file (the agent reads text
-  that run agents and anyone with push access wrote, and this push bypasses the steward's
-  reply gate). Commits by other people keep their author. It runs only if
+  request has, its merge base with the pull request's base branch is the same, it has no
+  merge commits, and no checkpoint subject or metadata is left. With a token it also
+  requires the branch, which must be the run branch, to be the head of an open pull
+  request. The lease is on the exact commit it compared against, so it does not overwrite
+  a push someone made meanwhile. What the pull request merges therefore does not change
+  when the agent errs, or follows an instruction planted in a commit message or file
+  through git (the agent reads text that run agents and anyone with push access wrote, and
+  this push bypasses the steward's reply gate). That check is a guard against mistakes,
+  not an isolation boundary: all stages run as root in one sandbox, the run's GitHub token
+  (`contents = "write"`) is readable there, and an agent determined to push can do so
+  itself, as any agent stage of the run could. Commits by other people keep their author. It runs only if
   `fidfab-pr-status`, asked again, reports the pull request green and quiet: the steward
   also ends when there is no pull request and when a reply preview fails, with threads
   still awaiting replies, and then the history is left as it is. An image older than the
@@ -569,14 +574,14 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 
 | Test | Where it runs | Checks |
 |---|---|---|
-| `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow, after the offline lints `tests/check-model-aliases.sh` and `tests/check-history-rewrite.sh` |
+| `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow, after the offline lints `tests/check-model-aliases.sh` and `tests/check-history-rewrite.sh`, the lint's self-test `tests/test-history-rewrite.sh` and `tests/test-rewrite-push.sh` |
 | `scripts/sync-components.sh --check` | host, CI | vendored components match `components/` |
 | `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again; the `author` step writes `git config` identity to `[run.git.author]` once (stubbed `fabro`/`gh`/`claude`/`codex`) |
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert and routes gated runs to the screen; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry (stubbed `gh`) |
-| `tests/test-history-rewrite.sh` | host | `tests/check-history-rewrite.sh`: in every workflow the history rewrite is the steward's only successor and is entered from nowhere else, `[run.run_branch] push = false` is set, the stage runs Claude opus at medium effort with `fidelity="truncate"`, is entered only through the `done` edge of a `fidfab-pr-status` check, does not force-push, and is followed only by a `fidfab-rewrite-push` node entered from nowhere else (scratch repositories that break one rule each) |
-| `tests/test-rewrite-push.sh` | host, CI | `fidfab-rewrite-push` pushes a rewritten history with an identical tree, and leaves origin as it is when the tree changed, someone pushed meanwhile, checkpoint metadata is left, the working tree is dirty, HEAD is detached, a rebase is in progress, or the upstream is missing or not `origin/<branch>` (scratch repositories with a bare origin) |
+| `tests/test-history-rewrite.sh` | host, CI | `tests/check-history-rewrite.sh`: in every workflow the history rewrite is the steward's only successor and is entered from nowhere else, `[run.run_branch] push = false` is set, the stage runs Claude opus at medium effort with `fidelity="truncate"`, is entered only through the `done` edge of a `fidfab-pr-status` check, does not force-push, and is followed only by a `fidfab-rewrite-push` node entered from nowhere else (scratch repositories that break one rule each) |
+| `tests/test-rewrite-push.sh` | host, CI | `fidfab-rewrite-push` pushes a rewritten history with an identical tree on the pull request's merge base, leaving out the empty checkpoint Fabro adds after the agent's stage, and leaves origin as it is when the tree changed, someone pushed meanwhile, the history moved to another base, has a merge commit or is behind the pull request, checkpoint metadata is left (any letter case), the working tree is dirty, HEAD is detached or not on the run branch, a rebase is in progress, the upstream is missing or not `origin/<branch>`, or (with a token) the branch is not the head of an open pull request; workspace hooks are not run (scratch repositories with a bare origin, stubbed `gh`) |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |
 | `tests/test-coderabbit.sh` | image | CLI installed; with `CODERABBIT_API_KEY`, `auth login` and `auth status --agent` succeed |
 | `tests/test-claude-acp.sh` | image | ACP `initialize` handshake; with a token, a full `session/prompt` round-trip returns the expected marker |

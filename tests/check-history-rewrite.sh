@@ -119,6 +119,9 @@ run_branch_push() {
 }
 
 status=0
+# script="..." as an attribute of its own: the command is BASH_REMATCH[2], and the match
+# does not run across a closing quote into another attribute (label="fidfab-pr-status").
+script_re='(^|[[:space:],[])script="([^"]*)"'
 fail() { echo "$1: $2"; status=1; }
 
 seen_rewrite=0
@@ -168,15 +171,19 @@ if [[ -f "$rewrite" ]]; then
     for p in $prev; do
       gate="$(nodes "$rewrite" | awk -v n="$p" '$1 == n')"
       labels="$(edge_labels "$rewrite" "$p" "$node")"
-      if [[ "$gate" != *'script="'*fidfab-pr-status* || -z "$labels" ]] || grep -qvx label=done <<<"$labels"; then
+      if ! [[ "$gate" =~ $script_re && "${BASH_REMATCH[2]}" == *fidfab-pr-status* ]] \
+        || [[ -z "$labels" ]] || grep -qvx label=done <<<"$labels"; then
         fail "$rewrite" "'$node' must be entered only through the \"done\" edge of a script node running fidfab-pr-status, not from '$p'"
+      elif [[ "$gate" != *'output_schema="routing"'* ]]; then
+        fail "$rewrite" "'$p' (fidfab-pr-status) must set output_schema=\"routing\" to route on its \"done\" label"
       fi
     done
     # The agent reads text written by run agents and anyone with push access; the push is
     # left to fidfab-rewrite-push, which refuses unless the tree is the pull request's.
     next="$(edges "$rewrite" | awk -v n="$node" '$1 == n { print $2 }' | sort -u)"
     pusher="$(nodes "$rewrite" | awk -v n="$next" '$1 == n')"
-    if [[ "$(grep -c . <<<"$next")" != 1 || "$pusher" != *'script="'*fidfab-rewrite-push* ]]; then
+    if [[ "$(grep -c . <<<"$next")" != 1 ]] \
+      || ! [[ "$pusher" =~ $script_re && "${BASH_REMATCH[2]}" == *fidfab-rewrite-push* ]]; then
       fail "$rewrite" "'$node' must be followed by a script node running fidfab-rewrite-push and nothing else (followed by: $(echo ${next:-nothing}))"
     else
       for p in $(edges "$rewrite" | awk -v n="$next" '$2 == n { print $1 }' | sort -u); do
@@ -188,7 +195,7 @@ if [[ -f "$rewrite" ]]; then
       fail "$rewrite" "'$node' needs a prompt file under components/ (prompt=\"@${prompt:-...}\")"
     else
       # The agent must leave the push to fidfab-rewrite-push, not force-push itself.
-      if grep -nE -- 'git push( [^ `]+)* (-f|--force[a-z-]*)([ `.,;:)=]|$)' "components/$prompt"; then
+      if grep -nE -- 'git push( [^ `]+)* (-f|--force[a-z-]*|\+[^ `]+)([ `.,;:)=]|$)' "components/$prompt"; then
         fail "components/$prompt" "must not force-push; fidfab-rewrite-push pushes after it"
       fi
     fi
