@@ -100,6 +100,7 @@ check "checkpoint trailer left" fail "Fabro checkpoint subjects or metadata" <<<
 check "Fabro co-author left" fail "Fabro checkpoint subjects or metadata" <<<'git commit -q --amend -m "Add the feature" -m "Co-Authored-By: Fabro <noreply@fabro.sh>"'
 check "uncommitted changes" fail "uncommitted changes" <<<'echo dirty >> a'
 check "untracked file" fail "uncommitted changes" <<<'echo new > u'
+check "untracked file, status.showUntrackedFiles=no" fail "uncommitted changes" <<<'git config status.showUntrackedFiles no; echo new > u'
 check "detached HEAD" fail "HEAD is detached" <<<'git checkout -q --detach'
 check "rebase in progress" fail "rebase, merge or cherry-pick is in progress" <<<'mkdir .git/rebase-merge'
 check "no upstream" fail "has no upstream" <<<'git branch -q --unset-upstream'

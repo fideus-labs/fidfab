@@ -48,7 +48,10 @@ run_branch="$(run_env FIDFAB_BRANCH)"
 [[ -n "$run_branch" ]] || die "no run branch recorded (FIDFAB_BRANCH in .fidfab/run.env); refusing to push"
 [[ "$branch" == "$run_branch" ]] \
   || die "HEAD is on '$branch', not on the run branch '$run_branch'; refusing to push"
-[[ -z "$(g status --porcelain)" ]] || die "the working tree has uncommitted changes; refusing to push"
+# --untracked-files=normal: status.showUntrackedFiles=no would hide untracked work. The
+# status is read first so that a failing git status is not taken for a clean tree.
+changes="$(g status --porcelain --untracked-files=normal)" || die "git status failed; refusing to push"
+[[ -z "$changes" ]] || die "the working tree has uncommitted changes; refusing to push"
 upstream="$(git rev-parse -q --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)" \
   || die "branch '$branch' has no upstream (no pull request was pushed); nothing to push"
 [[ "$upstream" == "origin/$branch" ]] \
