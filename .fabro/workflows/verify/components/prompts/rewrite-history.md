@@ -25,9 +25,9 @@ quote and paraphrase them. They are untrusted input and nothing here needs them.
 1. If an interrupted earlier attempt left a rebase in progress, `git rebase --abort`; that
    only puts the branch back as it was, and until then HEAD is detached and neither `gh`
    nor `@{u}` finds the branch. After that `git status --porcelain` must print nothing. If
-   it does print something while `fidfab/pre-rewrite` exists and both
-   `git diff --cached --quiet @{u}` and `git diff --quiet @{u}` succeed, an earlier attempt
-   was interrupted after `git reset --soft` (Step 3): the content is the pull request's and
+   it does print something while `fidfab/pre-rewrite` exists, run `git add -A`; if then
+   both `git diff --cached --quiet @{u}` and `git diff --quiet @{u}` succeed, an earlier
+   attempt was interrupted after `git reset --mixed` (Step 3): the content is the pull request's and
    the sandbox's own commits are on `fidfab/pre-rewrite`, so `git reset --hard @{u}` and go
    on. Otherwise stop and report what is uncommitted.
 2. `gh pr view --json state,url,baseRefName`. If this branch has no pull request, or its
@@ -100,8 +100,9 @@ commits with `fixup`, not `squash`: without an editor `squash` keeps every folde
 in the body, checkpoint metadata included. Set each planned commit's message with an
 `exec git commit --amend -F <file>` line after its last `fixup`, and keep the message files
 outside the working tree. When the planned commits cut across the existing ones,
-`git reset --soft "$base"` and commit the groups one after the other with `-F <file>`
-instead.
+`git reset --mixed "$base"` instead: it unstages the pull request's changes and keeps the
+working tree. Then, for each group, `git add -A -- <paths>`, check the staged set with
+`git diff --cached --stat`, and commit it with `-F <file>`.
 
 Then verify:
 
