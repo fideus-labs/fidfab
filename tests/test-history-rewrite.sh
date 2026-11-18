@@ -102,6 +102,9 @@ EDIT
 check "rewrite also on the no-changes path" fail "not from 'has_changes'" <<'EDIT'
 sed -i 's|has_changes -> done \[label="no-changes"\]|has_changes -> history [label="no-changes"]|' $wf
 EDIT
+check "rewrite in a workflow without a steward" fail "not from 'ship'" <<'EDIT'
+sed -i '/pr-steward/d; s|ship -> steward -> history -> done|ship -> history -> done|' $wf
+EDIT
 check "rewrite before the steward" fail "not from 'ship'" <<'EDIT'
 sed -i 's|ship -> steward -> history -> done|ship -> history -> steward -> done|' $wf
 EDIT
