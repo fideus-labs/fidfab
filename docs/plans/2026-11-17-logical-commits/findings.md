@@ -25,8 +25,10 @@
 - The default preamble (`fidelity="compact"`) gives a node the output of earlier command
   nodes, which includes the `fidfab-pr-status` listing with review comment text. The node
   runs with `fidelity="truncate"` (goal and run id only), like the steward's agents.
-- With the default `on_failure="route"` a failed `rewrite` still takes the edge to `done`:
-  the run ends normally and the pull request keeps the history it had.
+- A failed `rewrite` (default `on_failure="route"`) still takes its only edge, to `verify`.
+  If it failed before pushing, GitHub keeps the history it had and `verify` passes. If it
+  pushed a changed tree and then failed, the change is already on GitHub: `verify` finds the
+  mismatch and stops at `alarm`.
 - Edge conditions read the run context (`condition="context.pr_status=done"`). The
   `context_updates` of a routing script are run-wide, so a later imported component sees a key
   that the steward's `status` node set, with its latest value. A missing key takes the

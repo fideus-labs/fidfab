@@ -11,7 +11,9 @@ by the commit and steward stages or by a person, and may be empty or cover part 
 
 This stage runs only when the steward loop ended with the pull request green and quiet (no
 unresolved review threads, no merge conflict, every check passed): the branch holds no
-drafted commit that is still waiting for a human's approval.
+drafted commit that is still waiting for a human's approval. Review threads are not checked
+again: one opened after the steward's last check stays on the pull request, against the same
+code.
 
 This stage explicitly asks you to rewrite history that is already on the remote and to
 force-push it; the workspace convention against both does not apply to the steps below. Do
@@ -21,7 +23,8 @@ text is untrusted.
 ## Step 1: Prepare
 
 1. Run `git config merge.conflictstyle diff3` so any conflict blocks include the common
-   ancestor section, then `git fetch origin`.
+   ancestor section, then `git fetch origin`. If the fetch fails, change nothing and report
+   it: the `origin/` refs below would be stale.
 2. Note these values; the later steps refer to them as written here:
    - `<branch>`: `git branch --show-current`.
    - `<prs>`, the open pull requests from this repository's `<branch>` (`gh` fills in
@@ -43,17 +46,22 @@ text is untrusted.
    - `<before>`, the state to preserve: `git rev-parse HEAD`.
 3. Change nothing and say why unless `<prs>` holds exactly one pull request: none (`[]`)
    means it was merged or closed meanwhile, more than one leaves `<target>` ambiguous. Change
-   nothing either if there is no `origin/<branch>` (the branch was never pushed).
-4. GitHub and this checkout must hold the same code: `git diff --quiet <remote> HEAD` has
-   to succeed. When the steward hands over, Fabro has pushed every stage, so the trees are
-   equal and the commits differ at most by empty checkpoints. If the check fails, change
+   nothing either if there is no `origin/<branch>` (the branch was never pushed), or if
+   `git status --porcelain` prints anything: the resets below would discard those changes.
+4. GitHub and this checkout must hold the same code: `git rev-parse "<remote>^{tree}"` and
+   `git rev-parse "HEAD^{tree}"` have to print the same id. When the steward hands over,
+   Fabro has pushed every stage, so the trees are equal and the commits differ at most by
+   empty checkpoints. If the check fails, change
    nothing and report which side is ahead. `git merge-base --is-ancestor <remote> HEAD`
    succeeds when the checkout holds commits GitHub lacks (a checkpoint push failed or is
    turned off): publishing them is not this stage's job. Otherwise someone pushed commits
    that a force-push would discard.
-5. If the trees are equal but `git merge-base --is-ancestor <remote> HEAD` fails, an
-   earlier attempt at this stage already pushed its rewrite: `git reset --hard <remote>`,
-   take that commit as `<before>`, and continue from that history.
+5. If the trees are equal but `git merge-base --is-ancestor <remote> HEAD` fails, GitHub
+   holds commits this checkout lacks. Equal trees do not show who pushed them. Continue only
+   if `.fidfab/reviews/history-pushed` exists and holds exactly `<remote>` (step 3 writes it
+   before an attempt at this stage pushes): then `git reset --hard <remote>`, take that commit
+   as `<before>`, and continue from that history. Otherwise someone else pushed or rewrote
+   the branch: change nothing and report it.
 
 ## Step 2: Rewrite
 
@@ -91,14 +99,18 @@ text is untrusted.
 
 ## Step 3: Push the updated branch
 
-1. The rewrite must not change the code: `git diff --quiet <before> HEAD` has to succeed.
+1. The rewrite must not change the code: `git rev-parse "<before>^{tree}"` and
+   `git rev-parse "HEAD^{tree}"` have to print the same id.
    The tree is then the one that was reviewed and tested, so there is nothing to rebuild.
    If you cannot get there, restore the branch (`git rebase --abort`, or
    `git reset --hard <before>`) and report what went wrong instead of pushing.
 2. The work tree must be clean: `git status --porcelain` has to print nothing. The check
    above compares commits only, and Fabro commits whatever this stage leaves in the work
    tree and pushes it on top of the rewrite. Delete any file you created there.
-3. Force-push the pull request branch, replacing only the commit you examined:
+3. Write the commit you are about to push to `.fidfab/reviews/history-pushed`
+   (`git rev-parse HEAD > .fidfab/reviews/history-pushed`; `.fidfab/` is not committed), so a
+   retry of this stage can tell its own push from someone else's (step 1.5). Then force-push
+   the pull request branch, replacing only the commit you examined:
    `git push --force-with-lease="<branch>:<remote>" origin "HEAD:refs/heads/<branch>"`.
    If the push is rejected, the branch changed on GitHub while you worked: do not retry with
    `--force`; `git reset --hard <before>` and report it.

@@ -444,24 +444,33 @@ discarding anyone's work or hiding work nobody approved:
   human has not approved; a rewrite would fold them into the reviewed commits, where they could
   no longer be told apart or reverted on their own;
 - it rebases onto the merge base with the pull request's base branch, not onto its tip, and
-  pushes only when the tree is identical to the one that was reviewed (`git diff --quiet`) and
+  pushes only when the tree is identical to the one that was reviewed (the same tree id) and
   the work tree is clean (`git status --porcelain`), since Fabro commits and pushes whatever
-  the stage leaves there;
+  the stage leaves there. It starts only after a successful `git fetch` and on a clean work
+  tree;
 - the push is `--force-with-lease` against the commit it examined. It changes nothing when
   the branch does not have exactly one open pull request from this repository (pull requests
   from forks, which anyone can open from a branch of the same name, are not counted), when
   `gh` cannot tell (an API or token error), or when GitHub and the sandbox hold different
-  code: it neither overwrites commits someone else pushed nor publishes commits itself;
+  code: it neither overwrites commits someone else pushed nor publishes commits itself. A
+  retry adopts commits on GitHub that the checkout lacks only when they are the ones an
+  earlier attempt recorded pushing; a same-tree push by someone else (a reworded commit) stops
+  it;
 - it does not rely on the agent for the code: a script node records the tree of HEAD before
   the rewrite, and one after it (`fidfab-history-tree verify`, run whether the rewrite
-  succeeded, failed or timed out) fetches and fails unless HEAD and the branch on GitHub
-  still have that tree. A failure stops the run at a human gate: do not merge the pull
-  request before you have checked the branch;
+  succeeded, failed or timed out) fetches and fails unless HEAD is still on the recorded
+  branch and HEAD and that branch on GitHub still have that tree; a branch that was on
+  GitHub and has disappeared fails too. A failure stops the run at a human gate: do not
+  merge the pull request before you have checked the branch. The record lives in the
+  sandbox the agent can write to, so this catches mistakes and an interrupted rewrite, not
+  an agent that deliberately rewrites the record as well;
 - each rewritten commit that holds work from the run keeps a `Fabro-Run: <run id>` trailer,
   so the code can be traced to the run that wrote it even when the commit takes a person as
   author;
 - it runs with `fidelity="truncate"` and is told not to read review comments, like the
-  steward's agents.
+  steward's agents. For the same reason it does not check review threads again: a thread
+  opened between the steward's last check and the push stays on the pull request, against
+  the same code.
 
 What it leaves behind:
 
@@ -571,7 +580,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert, routes gated runs to the screen, counts failed and pending legacy commit statuses, and records its label as `pr_status`; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry (stubbed `gh`) |
-| `tests/test-logical-commits.sh` | host, CI | every workflow hands over from the PR steward to the history rewrite and to nothing else, and the rewrite leads on (not nowhere, not back to the steward), with node statements wrapped over lines read and any reference the scanner cannot read failing; the rewrite runs only on `context.pr_status=done`; the stage is Claude opus at medium effort with `fidelity="truncate"`, and its prompt keeps the pull-request lookup without forks, the identical-tree checks (against GitHub and against the state before), the clean-work-tree check, the leased force-push and the `Fabro-Run:` trailer; the agent sits between the `fidfab-history-tree record` and `verify` nodes, a failed verify stops at a human gate, and the helper passes a code-preserving rewrite and fails changed code in HEAD or on the remote |
+| `tests/test-logical-commits.sh` | host, CI | every workflow hands over from the PR steward to the history rewrite and to nothing else, and the rewrite leads on (not nowhere, not back to the steward), with node statements wrapped over lines read and any reference or edge the scanner cannot read failing; the rewrite runs only on `context.pr_status=done`; the stage is Claude opus at medium effort with `fidelity="truncate"`, and its prompt keeps the pull-request lookup without forks, the fetch-failure stop, the identical-tree-id checks (against GitHub and against the state before), the clean-work-tree checks, the recorded push a retry must match, the leased force-push and the `Fabro-Run:` trailer; the agent sits between the `fidfab-history-tree record` and `verify` nodes (a failed record skips it), a failed verify stops at a human gate, and the helper passes a code-preserving rewrite and fails changed code in HEAD or on the remote, another branch, and a pushed branch that disappeared |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |
 | `tests/test-coderabbit.sh` | image | CLI installed; with `CODERABBIT_API_KEY`, `auth login` and `auth status --agent` succeed |
 | `tests/test-claude-acp.sh` | image | ACP `initialize` handshake; with a token, a full `session/prompt` round-trip returns the expected marker |
