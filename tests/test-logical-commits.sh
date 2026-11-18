@@ -261,7 +261,8 @@ for want in 'git config merge.conflictstyle diff3' \
   '`<recorded>`, what GitHub had for the branch' \
   '`git merge-base --is-ancestor <recorded> <remote>`' \
   'one of the two lines of' \
-  "printf '%s\n' \"<remote>\" \"\$(git rev-parse HEAD)\" > .fidfab/reviews/history-pushed" \
+  "c=\"\$(git rev-parse HEAD)\" && printf '%s\n' \"<remote>\" \"\$c\" > .fidfab/reviews/history-pushed" \
+  'If this command fails, do not push' \
   '`git rev-parse "<before>^{tree}"` and' \
   'outside the work tree (`mktemp -d`)' \
   'git push --force-with-lease="<branch>:<remote>" origin "HEAD:refs/heads/<branch>"' \
@@ -273,7 +274,7 @@ done
 [[ "$(grep -c 'git status --porcelain --untracked-files=all' "$prompt")" == 2 &&
   "$(grep -c 'git status --porcelain' "$prompt")" == 2 ]] ||
   fail "$prompt: both work-tree checks must use git status --porcelain --untracked-files=all"
-grep -qF 'succeeds and prints nothing' "$prompt" || fail "$prompt: the status check must also succeed"
+[[ "$(grep -c 'succeeds and prints nothing' "$prompt")" == 2 ]] || fail "$prompt: both status checks must also succeed"
 
 # The prompt's safety commands behave as it says, on a scratch repository with a bare remote
 # standing in for GitHub. Offline: git only.
@@ -284,6 +285,9 @@ g remote add origin "$fix/remote.git"
 echo .fidfab/ >> "$fix/work/.git/info/exclude"  # as fidfab-bootstrap does
 g config status.showUntrackedFiles no  # the prompt's status check must not depend on it
 porcelain() { g status --porcelain --untracked-files=all; }
+# The prompt's check: git status succeeds and prints nothing (clean) or something (dirty).
+clean() { local out; out="$(porcelain)" && [[ -z "$out" ]]; }
+dirty() { local out; out="$(porcelain)" && [[ -n "$out" ]]; }
 g commit -q --allow-empty -m base
 g push -q origin main
 g checkout -q -b topic
@@ -322,11 +326,13 @@ g reset -q --hard HEAD~1
 # the stage (add everything, commit) would push it. Only the clean-work-tree check sees it.
 echo 'Add b' > "$fix/work/msg"
 same_tree "$before" HEAD || fail "rewrite: the tree check against <before> sees the work tree"
-[[ -n "$(porcelain)" ]] || fail "rewrite: the status check misses a file left in the work tree"
+dirty || fail "rewrite: the status check misses a file left in the work tree"
+clean && fail "rewrite: the status check passes a file left in the work tree"
 g add -A; g commit -q -m 'fabro(r): history.rewrite (success)'
 same_tree "$before" HEAD && fail "rewrite: the checkpoint after the stage did not pick up the file"
 g reset -q --hard HEAD~1
-[[ -z "$(porcelain)" ]] || fail "rewrite: the status check is not empty on a clean work tree"
+clean || fail "rewrite: the status check rejects a clean work tree"
+GIT_DIR="$fix/missing" clean 2>/dev/null && fail "rewrite: a failed git status passes as a clean work tree"
 # Step 2 by interactive rebase without an editor: a todo list through GIT_SEQUENCE_EDITOR.
 rewritten="$(g rev-parse HEAD)"
 g reset -q --hard "$before"
@@ -375,12 +381,12 @@ recorded="$remote"
 # retry starts from the candidate, and GitHub still holds what the attempt found.
 g reset -q --hard "$rewritten"
 may_continue && fail "rewrite: step 1.5 accepts a rewritten checkout without a record"
-mkdir -p "$(dirname "$pushed")"; printf '%s\n' "$remote" "$(g rev-parse HEAD)" > "$pushed"
+mkdir -p "$(dirname "$pushed")"; c="$(g rev-parse HEAD)" && printf '%s\n' "$remote" "$c" > "$pushed"
 may_continue || fail "rewrite: step 1.5 rejects a retry whose earlier attempt never pushed"
 # The push: the lease on the examined commit lets the rewrite through.
 g "${lease[@]}" || fail "rewrite: --force-with-lease rejected the expected remote"
 [[ "$(git -C "$fix/remote.git" rev-parse topic)" == "$(g rev-parse HEAD)" ]] || fail "rewrite: GitHub does not hold the rewrite"
-[[ -z "$(porcelain)" ]] || fail "rewrite: the history-pushed record shows up in the work tree"
+clean || fail "rewrite: the history-pushed record shows up in the work tree"
 # Retry after the earlier attempt pushed, from the checkout before it: not an ancestor, the
 # same tree, and recorded.
 g reset -q --hard "$before"
@@ -397,14 +403,30 @@ g fetch -q origin
 same_tree origin/topic HEAD || fail "rewrite: the reworded branch should keep the tree"
 may_continue && fail "rewrite: step 1.5 accepts a foreign rewording of the branch"
 
-# fidfab-history-tree on the same repository: a code-preserving rewrite passes, changed code
-# on either side fails.
+# fidfab-history-tree on the same repository: record needs GitHub to have moved only forward
+# from the head the steward cleared, along this checkout; then a code-preserving rewrite
+# passes and changed code on either side fails.
 ht="$here/docker/rootfs/usr/local/bin/fidfab-history-tree"
 h() { (cd "$fix/work" && "$ht" "$@"); }
+cleared="$fix/work/.fidfab/reviews/pr-head"
 g checkout -q -B topic "$before"; g push -q --force origin topic
 h verify >/dev/null 2>&1 && fail "history-tree: verify passes without a recorded tree"
-h record >/dev/null || fail "history-tree: record failed"
+rm -f "$cleared"
+h record >/dev/null 2>&1 && fail "history-tree: record passes without the steward's head"
+# The steward cleared <before>; Fabro then pushed an empty checkpoint.
+echo "$before" > "$cleared"
+g commit -q --allow-empty -m 'fabro(r): steward.done (success)'; g push -q origin topic
+h record >/dev/null || fail "history-tree: record rejects a Fabro checkpoint after the steward's check"
 [[ "$(cat "$fix/work/.fidfab/reviews/history-tree")" == "$(g rev-parse "HEAD^{tree}")"$'\ntopic\n'"$(g rev-parse origin/topic)" ]] || fail "history-tree: recorded the wrong tree, branch or GitHub commit"
+# Someone rewinds GitHub to a same-tree ancestor of the cleared head before record runs.
+g rev-parse HEAD > "$cleared"
+git -C "$fix/remote.git" update-ref refs/heads/topic "$before"
+h record >/dev/null 2>&1 && fail "history-tree: record passes a rewind behind the steward's head"
+# ... or pushes a same-tree commit this checkout lacks.
+g push -q --force origin "$(g commit-tree -p HEAD -m theirs "HEAD^{tree}"):refs/heads/topic"
+h record >/dev/null 2>&1 && fail "history-tree: record passes a commit pushed after the steward's check"
+g push -q --force origin topic
+h record >/dev/null || fail "history-tree: record failed"
 g reset -q --soft "$base"; g commit -q -m 'Add a and b'; g push -q --force origin topic
 h verify >/dev/null || fail "history-tree: verify rejects a code-preserving rewrite"
 echo changed > "$fix/work/b"; g commit -q -am tweak
@@ -418,9 +440,7 @@ h verify >/dev/null 2>&1 && fail "history-tree: verify passes on a branch other 
 g checkout -q topic
 g push -q origin --delete topic
 h verify >/dev/null 2>&1 && fail "history-tree: verify passes when the pushed branch disappeared"
-h record >/dev/null || fail "history-tree: record failed on a branch not on GitHub"
-[[ "$(sed -n 3p "$fix/work/.fidfab/reviews/history-tree")" == unpublished ]] || fail "history-tree: a branch not on GitHub is not recorded as unpublished"
-h verify >/dev/null || fail "history-tree: verify rejects a branch not on GitHub at record time"
+h record >/dev/null 2>&1 && fail "history-tree: record passes a branch not on GitHub"
 g rev-parse "HEAD^{tree}" > "$fix/work/.fidfab/reviews/history-tree"
 h verify >/dev/null 2>&1 && fail "history-tree: verify accepts a record without branch and remote"
 rc=0; h bogus >/dev/null 2>&1 || rc=$?; [[ $rc -eq 2 ]] || fail "history-tree: unknown command not rejected with 2"

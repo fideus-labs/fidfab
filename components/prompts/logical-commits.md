@@ -49,7 +49,7 @@ text is untrusted.
 3. Change nothing and say why unless `<prs>` holds exactly one pull request: none (`[]`)
    means it was merged or closed meanwhile, more than one leaves `<target>` ambiguous. Change
    nothing either if there is no `origin/<branch>` (the branch was never pushed), if
-   `<recorded>` is missing or `unpublished`, or unless
+   `<recorded>` is missing, or unless
    `git status --porcelain --untracked-files=all` succeeds and prints nothing: the resets
    below would discard uncommitted changes, and a failed status proves nothing.
 4. GitHub and this checkout must hold the same code: `git rev-parse "<remote>^{tree}"` and
@@ -112,17 +112,19 @@ text is untrusted.
    The tree is then the one that was reviewed and tested, so there is nothing to rebuild.
    If you cannot get there, restore the branch (`git rebase --abort`, or
    `git reset --hard <before>`) and report what went wrong instead of pushing.
-2. The work tree must be clean: `git status --porcelain --untracked-files=all` has to
-   succeed and print nothing. The check above compares commits only, and Fabro commits
-   whatever this stage leaves in the work tree and pushes it on top of the rewrite. Delete
-   any file you created there.
+2. The work tree must be clean: check that
+   `git status --porcelain --untracked-files=all` succeeds and prints nothing. The check
+   above compares commits only, and Fabro commits whatever this stage leaves in the work
+   tree and pushes it on top of the rewrite. Delete any file you created there.
 3. Record the commit you lease against and the commit you are about to push, so a retry of
    this stage can tell its own work from someone else's push (step 1.5); `.fidfab/` is not
    committed:
 
-       printf '%s\n' "<remote>" "$(git rev-parse HEAD)" > .fidfab/reviews/history-pushed
+       c="$(git rev-parse HEAD)" && printf '%s\n' "<remote>" "$c" > .fidfab/reviews/history-pushed
 
-   Then force-push the pull request branch, replacing only the commit you examined:
+   If this command fails, do not push and report it: without the record a retry cannot
+   recognise the push as its own. Then force-push the pull request branch, replacing only
+   the commit you examined:
    `git push --force-with-lease="<branch>:<remote>" origin "HEAD:refs/heads/<branch>"`.
    If the push is rejected, the branch changed on GitHub while you worked: do not retry with
    `--force`; `git reset --hard <before>` and report it.

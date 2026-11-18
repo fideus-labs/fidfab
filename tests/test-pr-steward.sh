@@ -35,7 +35,7 @@ chmod +x "$tmp/stub/gh"
 export PATH="$tmp/stub:$bin:$PATH"
 : > "$FIX/calls"
 
-jq -n '{number: 7, url: "https://github.com/o/r/pull/7", mergeable: "MERGEABLE",
+jq -n '{number: 7, url: "https://github.com/o/r/pull/7", mergeable: "MERGEABLE", headRefOid: "0123456789abcdef0123456789abcdef01234567",
         statusCheckRollup: [{status: "COMPLETED", conclusion: "SUCCESS"}]}' > "$FIX/pr.json"
 jq -n '
   def c($login; $type; $assoc; $body): {author: {login: $login, __typename: $type},
@@ -115,12 +115,14 @@ check "nothing unresolved and green: done"          test "$(THREADS="$FIX/resolv
 check "a failed legacy status is not done"          test "$(PR="$FIX/status-failed.json" THREADS="$FIX/resolved.json" fidfab-pr-status | label)" = work
 check "an expected legacy status is pending"        test "$(PR="$FIX/status-expected.json" THREADS="$FIX/resolved.json" fidfab-pr-status | label)" = pending
 check "... recorded as pr_status (logical-commits)" test "$(THREADS="$FIX/resolved.json" fidfab-pr-status | tail -n1 | jq -r .context_updates.pr_status)" = "done"
+check "... with the head it cleared"                test "$(cat .fidfab/reviews/pr-head)" = 0123456789abcdef0123456789abcdef01234567
 check "threads on later pages are listed"           grep -qF 'id PRRT_5' <(THREADS="$FIX/resolved.json" PAGE2="$FIX/page2.json" fidfab-pr-status)
 check "... and routed"                              test "$(THREADS="$FIX/resolved.json" PAGE2="$FIX/page2.json" fidfab-pr-status | label)" = review
 check "a listing that fails to render fails"        not quiet env THREADS="$FIX/broken.json" fidfab-pr-status
 check "... and leaves no partial listing"           test ! -e .fidfab/reviews/pr-status.md
 check "no pull request: no-pr"                      test "$(GH_NO_PR=1 fidfab-pr-status | label)" = no-pr
 check "... recorded as pr_status"                   test "$(GH_NO_PR=1 fidfab-pr-status | tail -n1 | jq -r .context_updates.pr_status)" = no-pr
+check "... and no head is left from an earlier check" test ! -e .fidfab/reviews/pr-head
 check "a failed thread query fails the stage"       not quiet env GH_FAIL_THREADS=1 fidfab-pr-status
 check "... and leaves no listing behind"            test ! -e .fidfab/reviews/pr-status.md
 

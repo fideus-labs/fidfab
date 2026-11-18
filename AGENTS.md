@@ -74,7 +74,9 @@ a Docker sandbox image and tests. Keep the following in mind.
 - Edge conditions can read the run context (`condition="context.KEY=value"`). The
   `context_updates` of a routing node are run-wide: a later imported component sees the latest
   value, and a missing key takes the unconditional edge. `logical-commits.fabro` routes on
-  `context.pr_status`, which `fidfab-pr-status` sets to its label.
+  `context.pr_status`, which `fidfab-pr-status` sets to its label. Script nodes cannot read
+  the context, so `fidfab-pr-status` also writes the head it checked to
+  `.fidfab/reviews/pr-head` for `fidfab-history-tree record`.
 - `[environments.*]` tables in `workflow.toml` only serve `fabro validate`; they are not sent to
   the server, and `fabro run` ignores `[run.environment] id` (Fabro 0.396). The environment must
   be in the server catalog (`scripts/setup.sh environment`) and selected with

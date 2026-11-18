@@ -20,7 +20,9 @@
 // HEAD and origin/<branch> still have that tree (fidfab-history-tree). verify runs
 // whether rewrite succeeded or not, so a rewrite that failed or timed out mid-way is
 // checked too. A failed verify stops at the alarm gate, so a human finds out before the
-// pull request is merged. If record fails, the rewrite is skipped.
+// pull request is merged. If record fails, the rewrite is skipped: record also fails when
+// GitHub moved since the steward's last status check (.fidfab/reviews/pr-head) other than
+// by this checkout's commits.
 //
 // Fabro checkpoints and pushes the stages that follow, so the pushed branch still
 // ends with their (empty) checkpoint commits.
