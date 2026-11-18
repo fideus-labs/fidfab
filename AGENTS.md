@@ -38,7 +38,9 @@ a Docker sandbox image and tests. Keep the following in mind.
   `tests/check-history-rewrite.sh` (`validate-workflows.sh` runs the check too). In every
   workflow the history rewrite is the steward's only successor, and
   `[run.run_branch] push = false` is set. Inside the component the agent is entered only
-  through the `done` edge of a `fidfab-pr-status` check.
+  through the `done` edge of a `fidfab-pr-status` check, does not push, and its only
+  successor is the `fidfab-rewrite-push` script node.
+- `tests/test-rewrite-push.sh` must pass after any change to `fidfab-rewrite-push`.
 - `tests/test-codex-model.sh` must pass after any change to `fidfab-codex-acp` or
   `docker/config/codex-config.toml`.
 - `tests/test-pr-steward.sh` must pass after any change to `fidfab-pr-status`,

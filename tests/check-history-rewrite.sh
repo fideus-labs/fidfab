@@ -14,8 +14,9 @@
 # (earlier stage output, such as review-thread listings, stays out of its preamble), is
 # entered only through the "done" edge of a script node that runs fidfab-pr-status (the
 # steward also ends with no pull request and after a failed reply preview; the rewrite
-# runs only once the pull request is green and quiet), and its prompt force-pushes only
-# with --force-with-lease --force-if-includes.
+# runs only once the pull request is green and quiet), and does not push: its only
+# successor is a script node running fidfab-rewrite-push, which pushes only an unchanged
+# tree and is entered from nowhere else, and its prompt has no forced `git push`.
 # Offline; no fabro needed.
 #
 # Usage: tests/check-history-rewrite.sh [repo-root]   (default: this repository)
@@ -171,17 +172,24 @@ if [[ -f "$rewrite" ]]; then
         fail "$rewrite" "'$node' must be entered only through the \"done\" edge of a script node running fidfab-pr-status, not from '$p'"
       fi
     done
+    # The agent reads text written by run agents and anyone with push access; the push is
+    # left to fidfab-rewrite-push, which refuses unless the tree is the pull request's.
+    next="$(edges "$rewrite" | awk -v n="$node" '$1 == n { print $2 }' | sort -u)"
+    pusher="$(nodes "$rewrite" | awk -v n="$next" '$1 == n')"
+    if [[ "$(grep -c . <<<"$next")" != 1 || "$pusher" != *'script="'*fidfab-rewrite-push* ]]; then
+      fail "$rewrite" "'$node' must be followed by a script node running fidfab-rewrite-push and nothing else (followed by: $(echo ${next:-nothing}))"
+    else
+      for p in $(edges "$rewrite" | awk -v n="$next" '$2 == n { print $1 }' | sort -u); do
+        [[ "$p" == "$node" ]] || fail "$rewrite" "'$next' (fidfab-rewrite-push) must be entered from '$node' only, not from '$p'"
+      done
+    fi
     prompt="$(sed -nE 's/.*[[:space:],[]prompt="@([^"]*)".*/\1/p' <<<"$agents")"
     if [[ -z "$prompt" || ! -f "components/$prompt" ]]; then
       fail "$rewrite" "'$node' needs a prompt file under components/ (prompt=\"@${prompt:-...}\")"
     else
-      # The stage fetches first, and after a fetch the lease alone lets a push overwrite
-      # commits that were fetched but not integrated; --force-if-includes refuses that.
-      grep -q -- 'git push --force-with-lease --force-if-includes' "components/$prompt" \
-        || fail "components/$prompt" "must push with 'git push --force-with-lease --force-if-includes'"
-      # A plain force overwrites whatever someone pushed to the pull request meanwhile.
-      if grep -nE -- 'git push( [^ `]+)* (-f|--force)([ `.,;:)]|$)' "components/$prompt"; then
-        fail "components/$prompt" "must not push with a plain --force"
+      # The agent must leave the push to fidfab-rewrite-push, not force-push itself.
+      if grep -nE -- 'git push( [^ `]+)* (-f|--force[a-z-]*)([ `.,;:)=]|$)' "components/$prompt"; then
+        fail "components/$prompt" "must not force-push; fidfab-rewrite-push pushes after it"
       fi
     fi
   fi

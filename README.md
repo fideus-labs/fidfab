@@ -65,7 +65,8 @@ uses the full local machine.
    ([Review comments are untrusted](#review-comments-are-untrusted)).
 6. Once the PR is quiet and green (checked again with `fidfab-pr-status`; otherwise the step
    is skipped), opus rewrites the branch history into logically related commits with
-   meaningful messages and force-pushes it; the content does not change
+   meaningful messages; `fidfab-rewrite-push` force-pushes it only if the content did not
+   change
    ([Pull request history](#pull-request-history)).
 
 The models, effort levels, and tools for each step are declared in the DOT graphs under
@@ -125,7 +126,7 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 | `personal-data-audit.fabro` | Codex decides whether the changes touch potentially personal data; if so runs the [Cloudflare security-audit skill](https://github.com/cloudflare/security-audit-skill) and opus addresses the findings |
 | `commit-and-pr.fabro` | Descriptive commit, `gh pr create --fill`, then title and body rewritten from the diff |
 | `pr-steward.fabro` | Hourly loop: review threads (human-screened, replies approved before posting, unless `steward_gate=false`), conflicts, CI; exits when all clear |
-| `rewrite-history.fabro` | After the steward, if `fidfab-pr-status` finds the PR green and quiet: opus squashes the branch's logically related commits (Fabro checkpoints, review fixes, steward follow-ups) into a few commits with meaningful messages and force-pushes the PR branch with a lease; the tree stays identical |
+| `rewrite-history.fabro` | After the steward, if `fidfab-pr-status` finds the PR green and quiet: opus squashes the branch's logically related commits (Fabro checkpoints, review fixes, steward follow-ups) into a few commits with meaningful messages; `fidfab-rewrite-push` then force-pushes the PR branch with a lease, only if the tree is identical |
 | `plan-with-files.fabro` | planning-with-files draft, human approve/revise loop |
 
 ## Setup
@@ -438,21 +439,29 @@ order the run happened to go. Two things turn that into a history worth reading:
   ([run configuration](https://docs.fabro.sh/execution/run-configuration)). Fabro then keeps
   the checkpoints in the sandbox, and only the stages' own pushes reach GitHub.
 - After the steward, the last stage (opus) squashes the logically related commits of the
-  branch into a few commits with meaningful messages and force-pushes the pull request
-  branch with `git push --force-with-lease --force-if-includes`, which refuses to overwrite
-  commits someone else pushed in the meantime. It starts from what is on the pull request,
-  keeps the merge base and checks that the tree it pushes is identical to the one the pull
-  request had, so the content that was reviewed and tested does not change. Commits by
-  other people keep their author. It runs only if `fidfab-pr-status`, asked again, reports
-  the pull request green and quiet: the steward also ends when there is no pull request and
-  when a reply preview fails, with threads still awaiting replies, and then the history is
-  left as it is.
+  branch into a few commits with meaningful messages. It starts from what is on the pull
+  request and keeps the merge base, and it does not push. A command node then runs
+  `fidfab-rewrite-push`, which fetches the pull request branch and force-pushes the
+  rewritten one only if its tree is identical, object ID for object ID, to the one the pull
+  request has, and no checkpoint subject or metadata is left; the lease is on the exact
+  commit it compared against, so it does not overwrite a push someone made meanwhile. The
+  content that was reviewed and tested therefore does not change, even if the agent errs
+  or follows an instruction planted in a commit message or file (the agent reads text
+  that run agents and anyone with push access wrote, and this push bypasses the steward's
+  reply gate). Commits by other people keep their author. It runs only if
+  `fidfab-pr-status`, asked again, reports the pull request green and quiet: the steward
+  also ends when there is no pull request and when a reply preview fails, with threads
+  still awaiting replies, and then the history is left as it is. An image older than the
+  workflow lacks `fidfab-rewrite-push`; the push node then fails and the history is left
+  as it is.
 
 While the run is in progress, the pull request shows the checkpoint commits that the pull
 request stage and the steward pushed along with their own; the rewrite replaces them. The
 force-push starts CI again on the same content, and where branch protection dismisses stale
-approvals it drops the approvals given before it. The steward has finished by then, so
-nothing in the run watches that CI run.
+approvals it drops the approvals given before it. Every rewritten commit is re-created with
+the run's identity as committer, so GPG or SSH signatures on commits are dropped; where
+branch protection requires signed commits, remove the `history` node from your copy of the
+workflow. The steward has finished by then, so nothing in the run watches that CI run.
 
 `fabro rewind` and `fabro fork` fetch checkpoints from origin and do not work for runs with
 `push = false`. `fabro resume` works from the run's sandbox, and the `fidfab` environment does
@@ -566,7 +575,8 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert and routes gated runs to the screen; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry (stubbed `gh`) |
-| `tests/test-history-rewrite.sh` | host | `tests/check-history-rewrite.sh`: in every workflow the history rewrite is the steward's only successor and is entered from nowhere else, `[run.run_branch] push = false` is set, the stage runs Claude opus at medium effort with `fidelity="truncate"`, is entered only through the `done` edge of a `fidfab-pr-status` check, and pushes with `--force-with-lease --force-if-includes` (scratch repositories that break one rule each) |
+| `tests/test-history-rewrite.sh` | host | `tests/check-history-rewrite.sh`: in every workflow the history rewrite is the steward's only successor and is entered from nowhere else, `[run.run_branch] push = false` is set, the stage runs Claude opus at medium effort with `fidelity="truncate"`, is entered only through the `done` edge of a `fidfab-pr-status` check, does not force-push, and is followed only by a `fidfab-rewrite-push` node entered from nowhere else (scratch repositories that break one rule each) |
+| `tests/test-rewrite-push.sh` | host, CI | `fidfab-rewrite-push` pushes a rewritten history with an identical tree, and leaves origin as it is when the tree changed, someone pushed meanwhile, checkpoint metadata is left, the working tree is dirty, HEAD is detached, a rebase is in progress, or the upstream is missing or not `origin/<branch>` (scratch repositories with a bare origin) |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |
 | `tests/test-coderabbit.sh` | image | CLI installed; with `CODERABBIT_API_KEY`, `auth login` and `auth status --agent` succeed |
 | `tests/test-claude-acp.sh` | image | ACP `initialize` handshake; with a token, a full `session/prompt` round-trip returns the expected marker |

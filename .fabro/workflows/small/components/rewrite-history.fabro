@@ -1,8 +1,14 @@
 // Component: rewrite-history
 // Runs after the PR steward. Claude (opus) regroups the branch's commits (Fabro's
 // per-stage checkpoint commits, the commit stage's summary, review fixes, the steward's
-// follow-ups) into logically related commits with meaningful messages and force-pushes
-// the pull request branch. The content of the branch does not change.
+// follow-ups) into logically related commits with meaningful messages. The content of the
+// branch does not change.
+//
+// The agent does not push. push, a command node, runs fidfab-rewrite-push: it fetches and
+// force-pushes, with a lease, only if HEAD's tree is the pull request's tree and no
+// checkpoint metadata is left. The agent reads commit messages and files that run agents
+// and anyone with push access wrote; an instruction planted there, or a plain mistake,
+// cannot push content no human approved past that check. A failed push skips to done.
 //
 // The steward also ends when there is no pull request and when a reply preview fails,
 // which leaves threads awaiting replies. check asks fidfab-pr-status again and the
@@ -27,11 +33,14 @@ digraph RewriteHistory {
   rewrite [label="Rewrite history (Claude opus)", class="claude opus git",
            backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
            prompt="@prompts/rewrite-history.md", fidelity="truncate"]
+  push    [label="Push if tree unchanged", script="fidfab-rewrite-push"]
   done    [shape=diamond, label="History rewritten or skipped"]
 
   start   -> check
   check   -> rewrite [label="done"]
   check   -> done    [condition="outcome=failed"]
   check   -> done
-  rewrite -> done -> exit
+  rewrite -> push
+  push    -> done    [condition="outcome=failed"]
+  push    -> done -> exit
 }

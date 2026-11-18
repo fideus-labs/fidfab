@@ -18,14 +18,17 @@ digraph RewriteHistory {
   rewrite [label="Rewrite history", class="claude opus git",
            backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",
            prompt="@prompts/rewrite-history.md", fidelity="truncate"]
+  push [script="fidfab-rewrite-push"]
   done [shape=diamond]
   start -> check
   check -> rewrite [label="done"]
   check -> done
-  rewrite -> done -> exit
+  rewrite -> push
+  push -> done [condition="outcome=failed"]
+  push -> done -> exit
 }
 DOT
-  echo 'Push with `git push --force-with-lease --force-if-includes`, never with a plain `--force`.' \
+  echo 'Do not run `git push`: fidfab-rewrite-push pushes after you.' \
     > "$1/components/prompts/rewrite-history.md"
   cat > "$1/.fabro/workflows/w/workflow.fabro" <<'DOT'
 digraph W {
@@ -131,13 +134,16 @@ perl -pi -e '$_ = "" if /^  check -> rewrite/; s|^  start -> check|  start -> ch
 EDIT
 check "gate that is not fidfab-pr-status" fail "not from 'check'" <<<'perl -pi -e "s|fidfab-pr-status \| tail -n 1|true|" $comp'
 check "fidfab-pr-status only in a comment" fail "not from 'check'" <<<'perl -pi -e "s|fidfab-pr-status \| tail -n 1|true|; s|^  check -> done|  check -> done  // script=\"fidfab-pr-status\"|" $comp'
-check "rewrite not reached" fail "'rewrite' is not reached" <<<'perl -pi -e "\$_ = \"\" if /^  check -> rewrite/; s|^  rewrite -> done -> exit|  done -> exit|" $comp'
+check "rewrite not reached" fail "'rewrite' is not reached" <<<'perl -pi -e "\$_ = \"\" if /^  check -> rewrite/; s|^  rewrite -> push|  start -> push|" $comp'
+check "rewrite goes straight to done" fail "must be followed by a script node running fidfab-rewrite-push" <<<'perl -pi -e "s|^  rewrite -> push|  rewrite -> done|" $comp'
+check "rewrite also goes to done" fail "followed by: done push" <<<'perl -pi -e "s|^  rewrite -> push|  rewrite -> push\n  rewrite -> done [condition=\"outcome=failed\"]|" $comp'
+check "push node runs something else" fail "must be followed by a script node running fidfab-rewrite-push" <<<'perl -pi -e "s|script=\"fidfab-rewrite-push\"|script=\"git push --force\"|" $comp'
+check "push node entered from the gate" fail "must be entered from 'rewrite' only, not from 'check'" <<<'perl -pi -e "s|^  check -> done\$|  check -> push|" $comp'
 check "component missing" fail "imported by a workflow but missing" <<<'rm $comp'
 check "prompt file missing" fail "needs a prompt file" <<<'rm $prompt'
-check "prompt without a lease" fail "must push with 'git push --force-with-lease --force-if-includes'" <<<'echo "Push with git push." > $prompt'
-check "prompt with a lease alone" fail "must push with 'git push --force-with-lease --force-if-includes'" <<<'perl -pi -e "s| --force-if-includes||" $prompt'
-check "prompt with a plain --force" fail "must not push with a plain --force" <<<'echo "Or run \`git push --force\`." >> $prompt'
-check "prompt with push -f to a remote" fail "must not push with a plain --force" <<<'echo "Or run git push origin HEAD -f" >> $prompt'
+check "prompt with a lease" fail "must not force-push" <<<'echo "Then run \`git push --force-with-lease --force-if-includes\`." >> $prompt'
+check "prompt with a plain --force" fail "must not force-push" <<<'echo "Or run \`git push --force\`." >> $prompt'
+check "prompt with push -f to a remote" fail "must not force-push" <<<'echo "Or run git push origin HEAD -f" >> $prompt'
 
 if "$repo/tests/check-history-rewrite.sh"; then echo "ok   repository workflows"
 else echo "FAIL repository workflows"; fail=1; fi
