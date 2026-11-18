@@ -1,8 +1,10 @@
 # Gemini on Vertex AI through LiteLLM
 
-fidfab's Fabro-native nodes run on **Gemini 3.8 Flash**, served by Google Cloud Vertex AI.
-**Gemini 4 Carbon** is registered beside it for native nodes that select it; no fidfab workflow
-does. Fabro has no Vertex AI provider of its own
+fidfab's workflows configure **Gemini 3.8 Flash**, served by Google Cloud Vertex AI, as the
+default model for Fabro-native nodes. No shipped workflow currently contains a native node: every
+agent stage runs Claude Code or Codex over ACP, so a normal run sends no requests to Gemini.
+**Gemini 4 Carbon** is registered beside Flash for native nodes that select it; no fidfab
+workflow does. Fabro has no Vertex AI provider of its own
 ([fabro#157](https://github.com/fabro-sh/fabro/issues/157)), so a local
 [LiteLLM](https://docs.litellm.ai/) proxy translates Fabro's OpenAI-compatible requests to
 Vertex AI, and Fabro's built-in
