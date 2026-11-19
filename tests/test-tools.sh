@@ -48,6 +48,14 @@ check ssh-keygen -F '[ssh.github.com]:443' -f /etc/ssh/ssh_known_hosts
 if [[ -d /opt/fidfab/repo/.git ]]; then
   check bash -c 'u="$(git -C /opt/fidfab/repo remote get-url origin)" && [[ $u == https://* && $u != https://ssh.github.com/* ]]'
 fi
+# With a Fabro stage's empty credential store in place, gh still answers for github.com
+# (GIT_CONFIG_PARAMETERS in the Dockerfile), and for no other host. A stage has only
+# GITHUB_TOKEN; gh would prefer a GH_TOKEN from the caller.
+fabro_git='unset GH_TOKEN; export GITHUB_TOKEN=probe GIT_TERMINAL_PROMPT=0 GIT_CONFIG_COUNT=2 \
+  GIT_CONFIG_KEY_0=credential.https://github.com.helper GIT_CONFIG_VALUE_0= \
+  GIT_CONFIG_KEY_1=credential.https://github.com.helper GIT_CONFIG_VALUE_1="store --file=/nonexistent"'
+check bash -c "$fabro_git"'; printf "url=https://github.com/o/r\n\n" | git credential fill | grep -qx password=probe'
+check bash -c "$fabro_git"'; ! printf "url=https://example.com/o/r\n\n" | git credential fill'
 for s in fidfab-bootstrap fidfab-claude-acp fidfab-codex-acp fidfab-coderabbit fidfab-diff fidfab-pr-status fidfab-pr-reply fidfab-doctor fidfab-warm-cache; do check command -v "$s"; done
 # pixi can create an environment offline-free (uses the warm cache if present)
 tmp="$(mktemp -d)"; ( cd "$tmp" && pixi init -q . >/dev/null && pixi --version >/dev/null ) && echo "[tools] ok   pixi init" || { echo "[tools] FAIL pixi init"; fail=1; }

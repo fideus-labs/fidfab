@@ -2,7 +2,8 @@
 # test-pr-steward.sh — host-side check of the PR steward helpers against a stubbed `gh`.
 # fidfab-pr-status lists unresolved threads with their authors, renders comment text inert and
 # routes gated runs to the human screen. fidfab-pr-reply posts only replies to screened
-# threads, pushes first, and does not repeat posted replies when a retry follows a failure.
+# threads, pushes first, and does not repeat posted replies when a retry follows a failure;
+# its preview flags a push that fails a dry run, without running the pre-push hook.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 bin="$PWD/docker/rootfs/usr/local/bin"
@@ -153,6 +154,18 @@ check "preview names thread, author and resolve"    grep -qF 'thread PRRT_1  src
 check "preview quotes the reply text"               grep -qxF $'    | Handled �[31m in abc' "$p"
 check "preview shows the unpushed diff"             grep -qxF '    | +change' "$p"
 check "preview of valid replies has no warning"     not grep -q 'NOT POSTABLE' "$p"
+hook="$(git rev-parse --git-path hooks/pre-push)"
+printf '#!/bin/sh\ntouch "%s/hook-ran"; exit 1\n' "$tmp" > "$hook"; chmod +x "$hook"
+fidfab-pr-reply --preview > "$p"
+check "the preview does not run the pre-push hook"  test ! -e "$tmp/hook-ran"
+rm "$hook"
+base="$(git -C "$tmp/origin.git" rev-parse feature)"
+git -C "$tmp/origin.git" update-ref refs/heads/feature \
+  "$(git -C "$tmp/origin.git" commit-tree -p "$base" -m "pushed elsewhere" "$base^{tree}")"
+fidfab-pr-reply --preview > "$p"
+check "a push that would be rejected is flagged"    grep -q 'NOT POSTABLE' "$p"
+check "... with git's reason"                       grep -qF 'git push fails:' "$p"
+git -C "$tmp/origin.git" update-ref refs/heads/feature "$base"
 check "a failed reply fails the stage"              not quiet env GH_FAIL_REPLY=2 fidfab-pr-reply
 check "... after pushing the commits"               test "$(git -C "$tmp/origin.git" rev-parse feature)" = "$(git rev-parse HEAD)"
 check "... leaving only the unposted reply"         test "$(jq -c 'map(.thread)' "$r")" = '["PRRT_2"]'
