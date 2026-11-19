@@ -42,8 +42,9 @@ if [[ "${1:-}" == --preview ]]; then
   p="$(problems)"
   # Approving pushes first, so a push that already fails a dry run (no credentials, the branch
   # moved on GitHub) must show here, not only as a failed publish the human never sees.
-  # GitHub's receive hooks (branch protection) run only on the real push.
-  if git rev-parse -q --verify '@{u}' >/dev/null && ! out="$(git push --dry-run 2>&1)"; then
+  # GitHub's receive hooks (branch protection) run only on the real push. --no-verify: a dry run
+  # still runs the local pre-push hook, which may upload (Git LFS) before the human approves.
+  if git rev-parse -q --verify '@{u}' >/dev/null && ! out="$(git push --dry-run --no-verify 2>&1)"; then
     p+="${p:+$'\n'}git push fails: $out"
   fi
   if [[ -n "$p" ]]; then
