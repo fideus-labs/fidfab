@@ -85,6 +85,9 @@ a Docker sandbox image and tests. Keep the following in mind.
   sets up, then a `credential-store` file that can be empty). No config file can win against
   that, so the Dockerfile appends gh through `GIT_CONFIG_PARAMETERS`; `tests/test-tools.sh`
   checks it.
+- `[run.integrations.github] permissions` only limits the run's `GITHUB_TOKEN` under Fabro's
+  GitHub App strategy. The default token strategy injects the vault's `GITHUB_TOKEN` as is, so
+  its scope is whatever token the user stored (`docs/github-token.md`).
 - Fabro commits a checkpoint after every node (`fabro(<run id>): <node> (<status>)`, empty
   when the node changed nothing) and pushes `fabro/run/<id>` each time, without updating
   `origin/<branch>` in the sandbox: `git fetch` before comparing with the remote. No node

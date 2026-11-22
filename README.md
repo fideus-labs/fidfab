@@ -36,7 +36,7 @@ compute-heavy work (compilation, tests) uses the full local machine.
  you ──(fabro run / web UI / VS Code)──▶ local Fabro server ──▶ LiteLLM proxy (127.0.0.1:4000)
                                            │                       └─▶ Vertex AI: Gemini 3.8 Flash,
                                            │                           Gemini 4 Carbon
-                                           │  injects vault secrets, mints a scoped GITHUB_TOKEN
+                                           │  injects vault secrets and GITHUB_TOKEN
                                            ▼
                                    docker: fidfab:latest  (Ubuntu 26.04)
                                    ├── /workspace   clone of the target branch
@@ -135,7 +135,8 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 
 - Linux or macOS workstation with Docker (daemon running, your user can access the socket), or Windows WSL with Docker Desktop
 - A GitHub account with push access to the target repository, logged in with the `gh` CLI
-  (`gh auth login`; `fabro install` takes its GitHub token from `gh auth token`)
+  (`gh auth login`; `fabro install` takes its GitHub token from `gh auth token`, which
+  [docs/github-token.md](docs/github-token.md) replaces with one scoped to the target repositories)
 - Subscriptions or keys: Claude Pro/Max (for Claude Code), ChatGPT Plus/Pro or an OpenAI API key
   (for Codex), a [CodeRabbit](https://www.coderabbit.ai) account with an agentic API key, a
   [Brave Search API](https://brave.com/search/api/) key
@@ -179,6 +180,11 @@ ChatGPT-subscription credential that Fabro routes through the Codex backend
 (`chatgpt.com/backend-api/codex`). fidfab does not use Fabro's OpenAI provider: native nodes run
 on Gemini through LiteLLM (next step) and the Codex stages authenticate with `CODEX_AUTH_JSON_B64`
 (step 5).
+
+That GitHub token is your `gh` login, with `repo` scope on every repository you can reach, and
+every agent in every run can use it; the `permissions` table in `workflow.toml` does not limit
+it. Replace it with a token limited to the target repositories
+([docs/github-token.md](docs/github-token.md)).
 
 `scripts/setup.sh author` then makes run commits carry your own identity instead of the GitHub
 token's login and noreply address: it appends
@@ -640,6 +646,7 @@ scripts/
 tests/                   image tests, ACP smoke client, workflow validation
 docs/graphs/             rendered workflow graphs
 docs/vertex-ai-litellm.md  Google Cloud project, service account, monitoring, and proxy setup
+docs/github-token.md     scoped GitHub token for Fabro runs
 .devcontainer/           VS Code dev container on the sandbox image
 ```
 
@@ -648,7 +655,7 @@ docs/vertex-ai-litellm.md  Google Cloud project, service account, monitoring, an
 - The workflows are validated offline with `fabro validate` and the ACP handshake has been
   tested against the published adapters; end-to-end runs depend on your subscriptions and
   the first full image build on your machine.
-- Fabro's standalone runner ignores `[run.integrations]`; the server-managed run path mints the
+- Fabro's standalone runner ignores `[run.integrations]`; the server-managed run path injects the
   GitHub token. Running under `fabro run` against a local server is the supported mode.
 - Fabro resolves component prompt paths relative to the importing workflow, so components are
   vendored per workflow (`scripts/sync-components.sh`). Nested imports (a component importing

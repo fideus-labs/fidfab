@@ -75,8 +75,9 @@ CODEX_AUTH_JSON_B64     = "{{ secrets.CODEX_AUTH_JSON_B64 }}"
 CODERABBIT_API_KEY      = "{{ secrets.CODERABBIT_API_KEY }}"
 
 # GitHub access for the sandbox: push the branch, open and edit the PR, post
-# and resolve review comments, read CI results. Fabro mints a scoped
-# GITHUB_TOKEN for the run.
+# and resolve review comments, read CI results. Only Fabro's GitHub App strategy
+# limits the run's GITHUB_TOKEN to these permissions; the default token strategy
+# passes the vault's GITHUB_TOKEN as is (docs/github-token.md).
 [run.integrations.github]
 permissions = { contents = "write", pull_requests = "write", issues = "write", checks = "read", actions = "read", statuses = "read", metadata = "read" }
 
