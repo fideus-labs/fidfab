@@ -296,8 +296,9 @@ with exit 64 and `FIDFAB_MODEL_LUNA` is ignored with a warning.
 **OpenAI Codex ACP**
 
 ```bash
-codex login --device-auth                # on the host, ChatGPT subscription
-base64 -w0 ~/.codex/auth.json | fabro secret set --value-stdin CODEX_AUTH_JSON_B64
+CODEX_HOME=~/.codex-fabro scripts/setup.sh codex   # a ChatGPT login of Fabro's own (device code)
+# by hand: CODEX_HOME=~/.codex-fabro codex login --device-auth
+#          base64 -w0 ~/.codex-fabro/auth.json | fabro secret set --value-stdin CODEX_AUTH_JSON_B64
 # or with an API key:
 printf '{"OPENAI_API_KEY":"sk-…"}' | base64 -w0 | fabro secret set --value-stdin CODEX_AUTH_JSON_B64
 ```
@@ -305,6 +306,12 @@ printf '{"OPENAI_API_KEY":"sk-…"}' | base64 -w0 | fabro secret set --value-std
 `fidfab-bootstrap` writes this to `$CODEX_HOME/auth.json` inside the sandbox; `codex-acp`
 reads the same auth store as the Codex CLI ([codex-acp](https://github.com/agentclientprotocol/codex-acp)).
 After `fabro fork`, whose sandbox is new, `fidfab-codex-acp` writes it again when it is missing.
+A ChatGPT login renews its tokens, and a renewal voids every other copy: give Fabro a login of
+its own (`CODEX_HOME=~/.codex-fabro` above), not a copy of the one Codex uses on the host. When
+the sandbox's Codex says "Your access token could not be refreshed", store a fresh one, then
+start a new run or fork the stopped one: a run keeps the secrets it started with. Fabro
+authenticates an ACP agent that advertises a sign-in method, by API key only; signed in through
+`auth.json`, `fidfab-codex-acp` advertises none, as Claude's adapter does.
 Subscription tokens rotate, so re-run this step if Codex stages stop authenticating.
 
 **CodeRabbit CLI**
@@ -592,7 +599,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 | `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again; the `author` step writes `git config` identity to `[run.git.author]` once (stubbed `fabro`/`gh`/`claude`/`codex`) |
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
-| `tests/test-review-wrappers.sh` | host, CI | after `fabro fork`, whose fresh sandbox missed bootstrap, `fidfab-codex-acp` writes `auth.json` (mode 600) from `CODEX_AUTH_JSON_B64` unless Codex has one, and `fidfab-coderabbit available` logs in again from `CODERABBIT_API_KEY` without touching it; `not_authenticated` without a key is unavailable; `fidfab-coderabbit review` saves the review and fails unless it completed (stubbed `codex-acp`/`coderabbit`) |
+| `tests/test-review-wrappers.sh` | host, CI | after `fabro fork`, whose fresh sandbox missed bootstrap, `fidfab-codex-acp` writes `auth.json` (mode 600) from `CODEX_AUTH_JSON_B64` unless Codex has one and, signed in, answers `initialize` with no sign-in method, and `fidfab-coderabbit available` logs in again from `CODERABBIT_API_KEY` without touching it; `not_authenticated` without a key is unavailable; `fidfab-coderabbit review` saves the review and fails unless it completed (stubbed `codex-acp`/`coderabbit`) |
 | `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert, routes gated runs to the screen, counts failed and pending legacy commit statuses, and records its label as `pr_status` and the head it checked in `pr-head`; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry (stubbed `gh`) |
 | `tests/test-logical-commits.sh` | host, CI | every workflow hands over from the PR steward to the history rewrite and to nothing else, and the rewrite leads on (not nowhere, not back to the steward), with node statements wrapped over lines read and any reference or edge the scanner cannot read failing; the rewrite runs only on `context.pr_status=done`; the stage is Claude opus at medium effort with `fidelity="truncate"`, and its prompt keeps the pull-request lookup without forks, the fetch-failure stop, the identical-tree-id checks (against GitHub and against the state before), the clean-work-tree checks with untracked files listed, the rule that GitHub moved only by checkpoints since the recorded commit or holds a recorded attempt (a push, rewording or rewind by someone else stops it), the leased force-push and the `Fabro-Run:` trailer; the agent sits between the `fidfab-history-tree record` and `verify` nodes (a failed record skips it), a failed verify stops at a human gate, and the helper records only when GitHub moved forward from the steward's cleared head along the checkout (a rewind or foreign push before the record fails), passes a code-preserving rewrite and fails changed code in HEAD or on the remote, another branch, and a pushed branch that disappeared |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |

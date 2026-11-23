@@ -56,6 +56,9 @@ a Docker sandbox image and tests. Keep the following in mind.
   graph-level `on_failure="exit"` reaches imported nodes too (imports are merged at parse time;
   checked with a probe run on 2026-11-23), and an explicit `condition="outcome=failed"` edge
   still wins: a stage meant to go on after a failure needs one.
+- Fabro authenticates an ACP agent whose `initialize` lists `authMethods`, and only with an
+  `api-key` method. codex-acp always lists one, so `fidfab-codex-acp` empties the list when
+  `auth.json` exists (a ChatGPT login, or an API key in it); Claude's adapter lists none.
 - A usage limit (Claude, Codex, CodeRabbit) is a failed node like any other: Fabro does not
   classify ACP failures, and its retries wait at most 60 s. A run keeps the secrets it started
   with (`resume` too); another account takes `fabro secret set` and `fabro fork`, whose fresh

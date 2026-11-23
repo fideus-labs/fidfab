@@ -11,8 +11,14 @@ bin="$PWD/docker/rootfs/usr/local/bin"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/stub"
 
-# codex-acp prints the auth.json it finds; coderabbit is logged in once `auth login` ran.
-printf '#!/bin/sh\ncat "$CODEX_HOME/auth.json"\n' > "$tmp/stub/codex-acp"
+# codex-acp prints the auth.json it finds, or answers one request with $ACP_ANSWER; coderabbit is logged in once
+# `auth login` ran.
+cat > "$tmp/stub/codex-acp" <<'EOF'
+#!/bin/sh
+if [ -n "$ACP_SPLIT" ]; then printf '{"t":"\303'; sleep 0.2; printf '\251"}\n'  # one character, two writes
+elif [ -n "$ACP_ANSWER" ]; then read -r _; echo "$ACP_ANSWER"
+else cat "$CODEX_HOME/auth.json"; fi
+EOF
 cat > "$tmp/stub/coderabbit" <<'EOF'
 #!/bin/sh
 case "$1 $2" in
@@ -32,7 +38,7 @@ run() {
   while [[ "$1" != -- ]]; do envs+=("$1"); shift; done; shift
   (cd "$home" && env -i PATH="$tmp/stub:$bin:$PATH" HOME="$home" "${envs[@]}" "$@" 2>/dev/null)
 }
-mkdir -p "$tmp"/h{1,2,3,4,5}/.codex; touch "$tmp/h3/logged-in"
+mkdir -p "$tmp"/h{1,2,3,4,5,6,7}/.codex; touch "$tmp/h3/logged-in"
 echo renewed > "$tmp/h2/.codex/auth.json"; echo renewed > "$tmp/h5/.codex/auth.json"
 
 secret="$(printf '{"OPENAI_API_KEY":"sk-test"}' | base64 -w0)"
@@ -50,6 +56,17 @@ check "coderabbit: logged in already, no second login" \
   "coderabbit: available"
 check "coderabbit: not_authenticated without a key is unavailable" \
   "$(run "$tmp/h4" -- fidfab-coderabbit available || echo "exit $?")" "exit 1"
+
+# Fabro authenticates an agent that advertises sign-in methods, by API key only: signed in, Codex advertises none.
+answer='{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"authMethods":[{"id":"api-key"}]}}'
+echo renewed > "$tmp/h6/.codex/auth.json"
+check "codex: signed in, initialize advertises no sign-in method" \
+  "$(echo '{"id":1,"method":"initialize"}' | run "$tmp/h6" ACP_ANSWER="$answer" -- fidfab-codex-acp)" \
+  '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"authMethods":[]}}'
+check "codex: signed in, a character split across two writes arrives whole" \
+  "$(run "$tmp/h6" ACP_SPLIT=1 -- fidfab-codex-acp)" '{"t":"é"}'
+check "codex: not signed in, initialize keeps its sign-in methods" \
+  "$(echo '{"id":1,"method":"initialize"}' | run "$tmp/h7" ACP_ANSWER="$answer" -- fidfab-codex-acp)" "$answer"
 
 done_line='{"type":"complete","status":"review_completed","findings":0}'
 check "coderabbit review: a finished review is saved and passes" \
