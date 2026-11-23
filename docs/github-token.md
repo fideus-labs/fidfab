@@ -86,8 +86,12 @@ the matching `workflow` scope too, so leaving it out changes nothing.
    ```
 
 5. Run `fabro doctor`, then a `verify` run on a branch with an open pull request. It clones,
-   pushes, reads the pull request and its checks, and answers review threads, which covers every
-   permission above.
+   pushes, edits and comments on the pull request, and reads its checks. A run uses only the
+   permissions of the steps it takes, though: on a quiet pull request (checks green, no open
+   review threads) the steward stops there, without answering review threads or reading
+   failed CI logs (Actions read). Those are first used when a later run gets there; a
+   `Resource not accessible` error at that step means the token lacks its permission in the
+   table above.
 
 `scripts/setup.sh` leaves the secret alone once Fabro is installed, but rerunning the
 `fabro install --github-strategy token` command from the README's step 1 copies `gh auth token`
