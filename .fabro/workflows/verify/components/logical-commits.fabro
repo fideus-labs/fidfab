@@ -46,7 +46,8 @@ digraph LogicalCommits {
   green -> done
   record -> rewrite
   record -> done   [condition="outcome=failed"]  // nothing recorded: leave the history as it is
-  rewrite -> verify  // also after a failed rewrite: it may have pushed part of its work
+  rewrite -> verify
+  rewrite -> verify  [condition="outcome=failed"]  // a failed rewrite may have pushed part of its work
   verify -> done
   verify -> alarm  [condition="outcome=failed"]
   alarm -> verify  [label="[R] Re-check"]

@@ -1,6 +1,8 @@
 // Component: codex-review
 // Independent review by Codex (terra) using the fidfab review priorities, then
 // Claude (opus) verifies and addresses each finding and records the approach.
+// A review that fails (a usage limit, a login, any error) stops at a gate: retry
+// once it is lifted, or continue without it, which the review records say.
 digraph CodexReview {
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]
@@ -8,10 +10,22 @@ digraph CodexReview {
   review  [label="Review (Codex terra)", class="codex terra review",
            backend="acp", acp.command="fidfab-codex-acp --model terra --effort high",
            prompt="@prompts/review-codex.md"]
+  blocked [shape=hexagon,
+           label="The Codex review failed: a usage limit, a login or another error (see the review stage in the run's log). Retry once it is lifted, or continue without it, which the review records will say. Another account takes fabro secret set and a fork from before this review. Typed text retries."]
+  skipped [label="Record the skipped Codex review",
+           script="mkdir -p .fidfab/reviews && echo 'Codex review skipped: the review stage failed (a usage limit, a login or another error) and a person chose to continue without it. No Codex finding was addressed.' | tee .fidfab/reviews/codex-review.md > .fidfab/reviews/codex-review-response.md"]
   address [label="Verify & address (Claude opus)", class="claude opus verify",
            backend="acp", acp.command="fidfab-claude-acp --model opus --effort xhigh",
            prompt="@prompts/address-codex.md"]
   done    [shape=diamond, label="Codex review addressed"]
 
-  start -> review -> address -> done -> exit
+  start -> review
+  review -> blocked [condition="outcome=failed"]
+  review -> address
+  blocked -> review  [label="[R] Retry the Codex review"]
+  blocked -> skipped [label="[C] Continue without the Codex review"]
+  blocked -> review  [freeform=true]  // typed text never skips the review
+  skipped -> done
+  address -> done
+  done -> exit
 }

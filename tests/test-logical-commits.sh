@@ -236,13 +236,14 @@ edges() { grep -E -- "$1" <<<"$code" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g'
   fail "$component: rewrite must be reached only from record, not: $(edges '->[[:space:]]*rewrite([^A-Za-z0-9_.]|$)')"
 [[ "$(edges '^[[:space:]]*record[[:space:]]*->' | sort)" == $'record -> done   [condition="outcome=failed"]\nrecord -> rewrite' ]] ||
   fail "$component: record must lead to rewrite, and to done when it fails, not: $(edges '^[[:space:]]*record[[:space:]]*->')"
-# The tree check around the agent: record before it, verify after it on every outcome (one
-# unconditional edge), and a failed verify stops at the human gate instead of passing.
+# The tree check around the agent: record before it, verify after it on every outcome (an
+# unconditional edge, and one on failure, since a failed stage otherwise ends the run), and a
+# failed verify stops at the human gate instead of passing.
 for want in 'script="fidfab-history-tree record"' 'script="fidfab-history-tree verify"'; do
   grep -qF -- "$want" <<<"$code" || fail "$component: lacks the node $want"
 done
-[[ "$(edges '^[[:space:]]*rewrite[[:space:]]*->')" == 'rewrite -> verify' ]] ||
-  fail "$component: rewrite must lead to verify only, not: $(edges '^[[:space:]]*rewrite[[:space:]]*->')"
+[[ "$(edges '^[[:space:]]*rewrite[[:space:]]*->' | sort)" == $'rewrite -> verify\nrewrite -> verify  [condition="outcome=failed"]' ]] ||
+  fail "$component: rewrite must lead to verify only, on success and on failure, not: $(edges '^[[:space:]]*rewrite[[:space:]]*->')"
 [[ "$(edges '^[[:space:]]*verify[[:space:]]*->' | sort)" == $'verify -> alarm  [condition="outcome=failed"]\nverify -> done' ]] ||
   fail "$component: verify must lead to alarm on failure and to done otherwise, not: $(edges '^[[:space:]]*verify[[:space:]]*->')"
 grep -qE '^[[:space:]]*alarm[[:space:]]*\[shape=hexagon' <<<"$code" || fail "$component: alarm must be a human gate"

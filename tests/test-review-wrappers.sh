@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# test-fork-credentials.sh — host-side check that the Codex and CodeRabbit wrappers restore
+# test-review-wrappers.sh — host-side check of the Codex and CodeRabbit wrappers. They restore
 # their credentials from the secrets when the sandbox lacks them, as after `fabro fork`: the
-# fork starts in a fresh sandbox, and fidfab-bootstrap ran in the parent's. Stubbed
-# codex-acp and coderabbit; the repository's fidfab-bootstrap does the restoring.
+# fork starts in a fresh sandbox, and fidfab-bootstrap ran in the parent's. And
+# `fidfab-coderabbit review` fails unless CodeRabbit finished the review, so that a usage
+# limit stops the workflow at a gate. Stubbed codex-acp and coderabbit; the repository's
+# fidfab-bootstrap does the restoring.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 bin="$PWD/docker/rootfs/usr/local/bin"
@@ -15,6 +17,7 @@ cat > "$tmp/stub/coderabbit" <<'EOF'
 #!/bin/sh
 case "$1 $2" in
   "auth login") touch "$HOME/logged-in"; echo login >> "$HOME/calls" ;;
+  "review --agent") printf '%s\n' "$CR_REVIEW" ;;
   "auth status") if [ -e "$HOME/logged-in" ]; then echo '{"status":"authenticated","authenticated":true}'
                  else echo '{"status":"not_authenticated","authenticated":false}'; fi ;;
 esac
@@ -47,4 +50,12 @@ check "coderabbit: logged in already, no second login" \
   "coderabbit: available"
 check "coderabbit: not_authenticated without a key is unavailable" \
   "$(run "$tmp/h4" -- fidfab-coderabbit available || echo "exit $?")" "exit 1"
+
+done_line='{"type":"complete","status":"review_completed","findings":0}'
+check "coderabbit review: a finished review is saved and passes" \
+  "$(run "$tmp/h1" CR_REVIEW="$done_line" -- fidfab-coderabbit review >/dev/null && cat "$tmp/h1/.fidfab/reviews/coderabbit.md")" \
+  "$done_line"
+check "coderabbit review: a review a usage limit ended fails" \
+  "$(run "$tmp/h1" CR_REVIEW='{"type":"error","phase":"review","status":"rate_limited"}' -- fidfab-coderabbit review >/dev/null || echo "exit $?")" \
+  "exit 1"
 exit $fail

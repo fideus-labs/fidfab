@@ -10,6 +10,10 @@ export PATH="$HOME/.fabro/bin:$PATH"
 "$here/tests/check-model-aliases.sh"
 # Offline as well: the history rewrite follows the PR steward in every workflow.
 "$here/tests/test-logical-commits.sh"
+# A failed stage must end the run, not hand on to the next stage (Fabro's default).
+for wf in "$here"/.fabro/workflows/*/workflow.fabro; do
+  grep -qE '^ *graph \[.*on_failure="exit"' "$wf" || { echo "$wf: graph [...] lacks on_failure=\"exit\"" >&2; exit 1; }
+done
 command -v fabro >/dev/null || { echo "fabro not installed: curl -fsSL https://fabro.sh/install.sh | sh"; exit 1; }
 "$here/scripts/sync-components.sh" --check
 status=0

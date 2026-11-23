@@ -2,11 +2,12 @@
 # fidfab-coderabbit — CodeRabbit availability check and review wrapper.
 #
 # Usage:
-#   fidfab-coderabbit available   # exit 0 if the CLI is authenticated and the service answers
-#   fidfab-coderabbit review      # agent-formatted review of this branch vs. the base branch
+#   fidfab-coderabbit available   # exit 0 if the CLI is logged in (logs in again from the key)
+#   fidfab-coderabbit review      # agent-formatted review of this branch vs. the base branch,
+#                                 # saved to .fidfab/reviews/coderabbit.md; exit 1 unless complete
 #
-# `available` is used by the workflow to decide between the CodeRabbit review
-# path and the Claude built-in review fallback (with one 3-minute retry).
+# coderabbit-review.fabro stops at a gate when either fails: retry, or fall back to
+# Claude's built-in review.
 set -euo pipefail
 
 [[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
@@ -32,7 +33,14 @@ case "${1:-}" in
     ;;
   review)
     shift
-    exec coderabbit review --agent --base "$base" "$@"
+    # Saved for the fix stage. Fails unless CodeRabbit finished the review: a usage limit or a
+    # login error ends it early, and the workflow then stops at a gate instead of reading nothing.
+    out=.fidfab/reviews/coderabbit.md
+    mkdir -p .fidfab/reviews
+    coderabbit review --agent --base "$base" "$@" | tee "$out"
+    if grep '"type": *"complete"' "$out" | grep -q '"status": *"review_completed"'; then exit 0; fi
+    echo "coderabbit: the review did not complete (see $out)" >&2
+    exit 1
     ;;
   *)
     sed -n '2,10p' "$0"; exit 64 ;;

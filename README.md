@@ -52,10 +52,15 @@ compute-heavy work (compilation, tests) uses the full local machine.
    human gate; you approve or type feedback, as many rounds as needed.
 2. Claude Code implements the approved plan in the sandbox.
 3. The verification pipeline runs over the diff: coverage of uncovered behaviour (opus),
-   CodeRabbit review and autonomous fix (opus, with a 3-minute retry and a fallback to Claude's
-   built-in review), Codex (terra) review, Claude (fable) review, a security review, a
-   personal-data decision with an optional Cloudflare security audit, each followed by an
-   opus "verify and address" pass that writes a Markdown record of the approach taken per finding.
+   CodeRabbit review and autonomous fix (opus), Codex (terra) review, Claude (fable) review, a
+   security review, a personal-data decision with an optional Cloudflare security audit, each
+   followed by an opus "verify and address" pass that writes a Markdown record of the approach
+   taken per finding. A CodeRabbit or Codex review that cannot run (a usage limit, a login) stops
+   at a human gate: retry once it is lifted, or continue without it (Claude's built-in review
+   stands in for CodeRabbit), which the records and the PR description say. Any other failed stage
+   ends the run unless its component routes the failure (the steward tries again after the hour, a
+   failed history rewrite is still verified, the personal-data audit runs when Codex cannot
+   decide); `fabro fork` resumes it from a checkpoint, with the secrets as they are now.
 4. opus writes the commit, opens the PR with `gh pr create --fill`, then rewrites the title and
    body from the actual diff and task context.
 5. A steward loop (opus) addresses review threads, rebases on conflicts, fixes failing CI, then
@@ -114,8 +119,8 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 |---|---|
 | `bootstrap.fabro` | Materialises credentials, ensures the checkout (deepens Fabro's shallow clone, or clones from the image's baked-in repo), attaches warm caches, records base/head refs and the plan slug |
 | `coverage.fabro` | opus checks the diff for uncovered behaviour and adds tests |
-| `coderabbit-review.fabro` | `coderabbit review --agent`; if unavailable, waits 3 minutes and retries, then falls back to Claude's built-in code review; opus fixes issues following section "4. Fix Issues (Autonomous Workflow)" of the [CodeRabbit code-review skill](https://github.com/coderabbitai/skills) |
-| `codex-review.fabro` | Codex (terra) review with the prioritised review prompt, then opus verifies and addresses, writing `docs/plans/<slug>/review-codex.md` |
+| `coderabbit-review.fabro` | `coderabbit review --agent` in a script node that fails unless the review completed; if CodeRabbit is not logged in it waits 3 minutes and checks again; a review that cannot run stops at a gate (retry, or Claude's built-in code review, recorded as such); opus fixes issues following section "4. Fix Issues (Autonomous Workflow)" of the [CodeRabbit code-review skill](https://github.com/coderabbitai/skills) |
+| `codex-review.fabro` | Codex (terra) review with the prioritised review prompt, then opus verifies and addresses, writing `docs/plans/<slug>/review-codex.md`; a failed review stops at a gate (retry, or continue without it, recorded in `.fidfab/reviews/`) |
 | `claude-review.fabro` | Same review by Claude (fable), then opus verifies and addresses |
 | `security-review.fabro` | opus security review of the changes, then verify and address |
 | `personal-data-audit.fabro` | Codex decides whether the changes touch potentially personal data; if so runs the [Cloudflare security-audit skill](https://github.com/cloudflare/security-audit-skill) and opus addresses the findings |
@@ -582,12 +587,12 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 
 | Test | Where it runs | Checks |
 |---|---|---|
-| `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow |
+| `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow, each of which ends the run on a failed stage (`on_failure="exit"`) |
 | `scripts/sync-components.sh --check` | host, CI | vendored components match `components/` |
 | `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again; the `author` step writes `git config` identity to `[run.git.author]` once (stubbed `fabro`/`gh`/`claude`/`codex`) |
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
-| `tests/test-fork-credentials.sh` | host, CI | after `fabro fork`, whose fresh sandbox missed bootstrap, `fidfab-codex-acp` writes `auth.json` from `CODEX_AUTH_JSON_B64` and `fidfab-coderabbit available` logs in again from `CODERABBIT_API_KEY`; `not_authenticated` without a key is unavailable (stubbed `codex-acp`/`coderabbit`) |
+| `tests/test-review-wrappers.sh` | host, CI | after `fabro fork`, whose fresh sandbox missed bootstrap, `fidfab-codex-acp` writes `auth.json` (mode 600) from `CODEX_AUTH_JSON_B64` unless Codex has one, and `fidfab-coderabbit available` logs in again from `CODERABBIT_API_KEY` without touching it; `not_authenticated` without a key is unavailable; `fidfab-coderabbit review` saves the review and fails unless it completed (stubbed `codex-acp`/`coderabbit`) |
 | `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert, routes gated runs to the screen, counts failed and pending legacy commit statuses, and records its label as `pr_status` and the head it checked in `pr-head`; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry (stubbed `gh`) |
 | `tests/test-logical-commits.sh` | host, CI | every workflow hands over from the PR steward to the history rewrite and to nothing else, and the rewrite leads on (not nowhere, not back to the steward), with node statements wrapped over lines read and any reference or edge the scanner cannot read failing; the rewrite runs only on `context.pr_status=done`; the stage is Claude opus at medium effort with `fidelity="truncate"`, and its prompt keeps the pull-request lookup without forks, the fetch-failure stop, the identical-tree-id checks (against GitHub and against the state before), the clean-work-tree checks with untracked files listed, the rule that GitHub moved only by checkpoints since the recorded commit or holds a recorded attempt (a push, rewording or rewind by someone else stops it), the leased force-push and the `Fabro-Run:` trailer; the agent sits between the `fidfab-history-tree record` and `verify` nodes (a failed record skips it), a failed verify stops at a human gate, and the helper records only when GitHub moved forward from the steward's cleared head along the checkout (a rewind or foreign push before the record fails), passes a code-preserving rewrite and fails changed code in HEAD or on the remote, another branch, and a pushed branch that disappeared |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |
