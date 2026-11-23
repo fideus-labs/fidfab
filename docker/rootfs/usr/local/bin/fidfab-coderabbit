@@ -15,10 +15,18 @@ base="${FIDFAB_BASE_BRANCH:-main}"
 case "${1:-}" in
   available)
     command -v coderabbit >/dev/null || { echo "coderabbit: not installed" >&2; exit 1; }
-    out="$(timeout 60 coderabbit auth status --agent 2>&1 || true)"
-    if printf '%s' "$out" | grep -qiE 'authenticated|logged in|"status" *: *"ok"'; then
-      echo "coderabbit: available"; exit 0
+    status() { timeout 60 coderabbit auth status --agent 2>&1 || true; }
+    # "status":"not_authenticated" also contains the word, so read the boolean.
+    authenticated() { printf '%s' "$out" | grep -qE '"authenticated" *: *true'; }
+    out="$(status)"
+    # A forked run starts in a fresh sandbox after bootstrap ran in another one: log in again,
+    # as bootstrap does. Not through bootstrap, which would also rewrite Codex's auth.json over
+    # a token Codex may have renewed since.
+    if ! authenticated && [[ -n "${CODERABBIT_API_KEY:-}" ]]; then
+      coderabbit auth login ${CODERABBIT_REGION:+--region "$CODERABBIT_REGION"} --api-key "$CODERABBIT_API_KEY" >/dev/null 2>&1 || true
+      out="$(status)"
     fi
+    if authenticated; then echo "coderabbit: available"; exit 0; fi
     echo "coderabbit: unavailable — $out" >&2
     exit 1
     ;;

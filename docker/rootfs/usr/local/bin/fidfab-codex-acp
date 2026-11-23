@@ -54,6 +54,11 @@ case "$effort" in
 esac
 
 export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+# A forked run starts in a fresh sandbox after bootstrap ran in another one: write the
+# credentials again from the secret. Its log goes to stderr, stdout carries ACP.
+if [[ -n "${CODEX_AUTH_JSON_B64:-}" && ! -f "$CODEX_HOME/auth.json" ]]; then
+  fidfab-bootstrap --credentials-only >&2 || true
+fi
 export NO_BROWSER=1
 export INITIAL_AGENT_MODE="${INITIAL_AGENT_MODE:-agent-full-access}"
 

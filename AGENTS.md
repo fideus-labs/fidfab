@@ -40,6 +40,8 @@ a Docker sandbox image and tests. Keep the following in mind.
   `docker/config/codex-config.toml`.
 - `tests/test-pr-steward.sh` must pass after any change to `fidfab-pr-status`,
   `fidfab-pr-reply` or `quote.jq`.
+- `tests/test-fork-credentials.sh` must pass after any change to `fidfab-codex-acp`,
+  `fidfab-coderabbit` or the credential step of `fidfab-bootstrap`.
 - `shellcheck -S warning` on all shell scripts; `node --check tests/acp-smoke.mjs`.
 - If `docker` is available, `docker/build.sh && tests/test-image.sh` is the full check.
 

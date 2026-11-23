@@ -38,6 +38,8 @@ jobs:
         run: tests/test-build.sh
       - name: PR steward helpers quote comments and post only screened replies
         run: tests/test-pr-steward.sh
+      - name: Codex and CodeRabbit wrappers restore their credentials after a fork
+        run: tests/test-fork-credentials.sh
       - name: shellcheck
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q shellcheck >/dev/null
