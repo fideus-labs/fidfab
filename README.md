@@ -296,7 +296,7 @@ with exit 64 and `FIDFAB_MODEL_LUNA` is ignored with a warning.
 **OpenAI Codex ACP**
 
 ```bash
-CODEX_HOME=~/.codex-fabro scripts/setup.sh codex   # a ChatGPT login of Fabro's own (device code)
+CODEX_HOME=~/.codex-fabro scripts/setup.sh --replace codex   # a ChatGPT login of Fabro's own (device code)
 # by hand: CODEX_HOME=~/.codex-fabro codex login --device-auth
 #          base64 -w0 ~/.codex-fabro/auth.json | fabro secret set --value-stdin CODEX_AUTH_JSON_B64
 # or with an API key:

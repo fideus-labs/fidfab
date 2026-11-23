@@ -2,8 +2,9 @@
 # setup.sh — configure a workstation to run fidfab workflows with a local Fabro server.
 #
 # Idempotent and interactive where a credential is needed; a secret that
-# `fabro secret list` already shows is not asked for again. Steps (each
-# can be run on its own with `scripts/setup.sh <step>`):
+# `fabro secret list` already shows is not asked for again, unless --replace
+# comes first (`scripts/setup.sh --replace coderabbit`). Steps (each can be
+# run on its own with `scripts/setup.sh <step>`):
 #
 #   fabro        install Fabro, upgrade to the latest pre-release, run the install wizard
 #   author       commit as git config user.name / user.email ([run.git.author])
@@ -26,10 +27,12 @@ SETTINGS="$HOME/.fabro/settings.toml"
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 note() { printf '  %s\n' "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
-keep_secret() { # name; true, with a note, when the vault already holds it
+REPLACE=""
+keep_secret() { # name; true, with a note, when the vault already holds it and --replace was not given
+  [[ -n "$REPLACE" ]] && return 1
   # --json, because the table layout is not a stable interface (its rows are indented).
   grep -qE "\"name\": *\"$1\"" <<<"$(fabro secret list --no-upgrade-check --json 2>/dev/null)" || return 1
-  note "$1 is already set, keeping it. To replace it: fabro secret rm $1, then re-run this step."
+  note "$1 is already set, keeping it. To replace it: scripts/setup.sh --replace <this step>."
 }
 set_secret() { # name description
   keep_secret "$1" || fabro secret set --no-upgrade-check --description "$2" "$1"
@@ -304,7 +307,8 @@ steps=("$@")
 for s in "${steps[@]}"; do
   case "$s" in
     fabro|author|litellm|brave|claude|codex|coderabbit|environment|doctor) "step_$s" ;;
-    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+    --replace) REPLACE=1; continue ;;
+    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "unknown step: $s" >&2; exit 64 ;;
   esac
   echo
