@@ -21,6 +21,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Fabro (latest pre-release)
+        # The installer downloads the release with gh: without a token it shares the runner's anonymous rate limit,
+        # and fails with HTTP 403 when other jobs on the same address used it up.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           curl -fsSL https://fabro.sh/install.sh | bash
           echo "$HOME/.fabro/bin" >> "$GITHUB_PATH"
