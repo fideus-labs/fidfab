@@ -16,8 +16,9 @@
      *Verification* (tests added, review stages that ran: coverage, CodeRabbit or built-in
      review, Codex review, Claude review, security review, and the personal-data
      decision with the audit result when it ran). A review record that says the review
-     was skipped, or that Claude's built-in review stood in for CodeRabbit, goes first in
-     *Verification*, in bold.
+     was skipped, or that another reviewer stood in (Claude's built-in review for CodeRabbit,
+     DeepSeek for Codex, for the code or a roadmap's critique), goes first in *Verification*,
+     in bold.
 4. Update the PR with `gh pr edit <number> --title ... --body-file <file>`.
 5. Post the review records as one PR comment so reviewers can see how each finding was
    handled: concatenate the `*-response.md` files from any `.fidfab/reviews-<n>/` in order, then

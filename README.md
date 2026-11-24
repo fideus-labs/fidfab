@@ -102,7 +102,7 @@ Claude Code and Codex take the level from `--effort` on the node's `acp.command`
 |---|---|---|---|
 | `small` | One-shot prompt | none before implementation; steward review screening and reply approval | Branch, verified diff, PR, stewarded to green |
 | `medium` | `task_plan.md` / `findings.md` / `progress.md` via the [planning-with-files](https://github.com/OthmanAdi/planning-with-files) skill | plan approval loop; steward review screening and reply approval | Plan files committed with the implementation, PR |
-| `large` | Research-backed roadmap drafted interactively with Claude fable, critiqued by Codex terra | draft approval, final approval; steward review screening and reply approval | `docs/roadmap/**.md` work items with implementation plans and acceptance criteria, each sized for `medium`; PR |
+| `large` | Research-backed roadmap drafted interactively with Claude fable, critiqued by Codex terra (DeepSeek in its place when Codex fails; both failing stop at a gate) | draft approval, final approval; steward review screening and reply approval | `docs/roadmap/**.md` work items with implementation plans and acceptance criteria, each sized for `medium`; PR |
 | `verify` | Existing branch | steward review screening and reply approval | Verification pipeline only, PR and steward |
 
 The steward gates are on by default and only appear when a PR has review threads awaiting a
@@ -310,8 +310,15 @@ reads the same auth store as the Codex CLI ([codex-acp](https://github.com/agent
 After `fabro fork`, whose sandbox is new, `fidfab-codex-acp` writes it again when it is missing.
 A ChatGPT login renews its tokens, and a renewal voids every other copy: give Fabro a login of
 its own (`CODEX_HOME=~/.codex-fabro` above), not a copy of the one Codex uses on the host. When
-the sandbox's Codex says "Your access token could not be refreshed", store a fresh one, then
-start a new run or fork the stopped one: a run keeps the secrets it started with. Fabro
+the sandbox's Codex says "Your access token could not be refreshed", the copy in `~/.codex-fabro` is void too, and
+`scripts/setup.sh codex` would store it again: log out of it first, so that setup logs in afresh,
+
+```bash
+CODEX_HOME=~/.codex-fabro codex logout
+CODEX_HOME=~/.codex-fabro scripts/setup.sh --replace codex   # a fresh device login, stored over the void secret
+```
+
+then start a new run or fork the stopped one: a run keeps the secrets it started with. Fabro
 authenticates an ACP agent that advertises a sign-in method, by API key only; signed in through
 `auth.json`, `fidfab-codex-acp` advertises none, as Claude's adapter does.
 Subscription tokens rotate, so re-run this step if Codex stages stop authenticating.
