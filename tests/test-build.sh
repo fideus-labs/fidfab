@@ -42,7 +42,7 @@ real_git="$(command -v git)"
 cat > "$tmp/bin/git" <<STUB
 #!/usr/bin/env bash
 if [[ "\$*" != *--get-url* && "\$*" == *"ls-remote -- "* ]]; then
-  [[ -z "\${GIT_CONFIG_COUNT:-}" && "\$PWD" == / && "\$*" == *" https://readable.test/OWNER/REPO HEAD" ]]; exit
+  [[ -z "\${GIT_CONFIG_COUNT:-}\${NETRC:-}" && "\$HOME" == /dev/null && "\$PWD" == / && "\$*" == *" https://readable.test/OWNER/REPO HEAD" ]]; exit
 fi
 exec "$real_git" "\$@"
 STUB
@@ -50,7 +50,7 @@ chmod +x "$tmp/bin/git"
 repo_check() { # name, insteadOf base, expected TARGET_REPO_URL, ssh forwarded (yes/no)
   local out ssh=no
   out="$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 \
-    GIT_CONFIG_KEY_0="url.$2.insteadOf" GIT_CONFIG_VALUE_0=git@github.com: SSH_AUTH_SOCK=/x \
+    GIT_CONFIG_KEY_0="url.$2.insteadOf" GIT_CONFIG_VALUE_0=git@github.com: SSH_AUTH_SOCK=/x NETRC="$tmp/netrc" \
     docker/build.sh git@github.com:OWNER/REPO 2>&1)"
   if grep -qx -- --ssh "$FIDFAB_TEST_LOG.all"; then ssh=yes; fi
   if grep -qxF "TARGET_REPO_URL=$3" "$FIDFAB_TEST_LOG.all" && [[ "$ssh" == "$4" && "$out" != *s3cret* ]]; then
