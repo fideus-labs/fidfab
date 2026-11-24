@@ -48,7 +48,7 @@ check ssh-keygen -F '[ssh.github.com]:443' -f /etc/ssh/ssh_known_hosts
 if [[ -d /opt/fidfab/repo/.git ]]; then
   check bash -c 'u="$(git -C /opt/fidfab/repo remote get-url origin)" && [[ $u == https://* && $u != https://ssh.github.com/* ]]'
 fi
-for s in fidfab-bootstrap fidfab-claude-acp fidfab-codex-acp fidfab-coderabbit fidfab-diff fidfab-pr-status fidfab-pr-reply fidfab-doctor fidfab-warm-cache; do check command -v "$s"; done
+for s in fidfab-bootstrap fidfab-claude-acp fidfab-codex-acp fidfab-coderabbit fidfab-diff fidfab-pr-status fidfab-pr-reply fidfab-doctor fidfab-warm-cache fidfab-walls; do check command -v "$s"; done
 # pixi can create an environment offline-free (uses the warm cache if present)
 tmp="$(mktemp -d)"; ( cd "$tmp" && pixi init -q . >/dev/null && pixi --version >/dev/null ) && echo "[tools] ok   pixi init" || { echo "[tools] FAIL pixi init"; fail=1; }
 rm -rf "$tmp"

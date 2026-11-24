@@ -15,6 +15,7 @@ digraph FidfabLarge {
   exit  [shape=Msquare,  label="Exit"]
 
   bootstrap [import="components/bootstrap.fabro"]
+  preflight [import="components/preflight.fabro"]
 
   draft    [label="Research & draft roadmap (Claude fable)", class="claude fable plan",
             backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
@@ -41,7 +42,7 @@ digraph FidfabLarge {
   steward  [import="components/pr-steward.fabro"]
   history  [import="components/logical-commits.fabro"]
 
-  start -> bootstrap -> draft -> gate
+  start -> bootstrap -> preflight -> draft -> gate
   gate   -> critique [label="[A] Approve draft"]
   gate   -> revise   [freeform=true]
   revise -> gate

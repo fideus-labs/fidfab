@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# fidfab-walls — what preflight.fabro records of the walls before a run spends anything.
+#
+# Usage:
+#   fidfab-walls coderabbit    # start afresh: record whether CodeRabbit is logged in (exits 0)
+#   fidfab-walls down WALL     # record that WALL (codex or deepseek) did not answer
+#   fidfab-walls verdict       # write .fidfab/reviews/preflight.md; exit 1 when a wall is down
+#   fidfab-walls continued     # record that a person chose to run with those walls down
+#
+# The Codex and DeepSeek nodes of preflight.fabro write "ok" into .fidfab/walls/<wall> when they
+# answer. A wall is down when CodeRabbit is not logged in (Claude's built-in review would stand
+# in for it), or when neither Codex nor DeepSeek answers (no independent review). Codex alone
+# down is only recorded: DeepSeek then reviews in its place.
+set -euo pipefail
+
+walls=.fidfab/walls
+record=.fidfab/reviews/preflight.md
+mkdir -p "$walls" .fidfab/reviews
+state() { if [[ "$(cat "$walls/$1" 2>/dev/null)" == ok ]]; then echo ok; else echo down; fi; }
+
+case "${1:-}" in
+  coderabbit)
+    rm -f "$walls/codex" "$walls/deepseek"  # a re-check never reads an earlier answer
+    if fidfab-coderabbit available >/dev/null 2>&1; then echo ok; else echo down; fi > "$walls/coderabbit"
+    ;;
+  down)
+    [[ "${2:-}" == codex || "${2:-}" == deepseek ]] || { echo "fidfab-walls: down codex|deepseek" >&2; exit 64; }
+    echo down > "$walls/$2"
+    ;;
+  verdict)
+    coderabbit=$(state coderabbit) codex=$(state codex) deepseek=$(state deepseek) independent=none
+    [[ $deepseek == ok ]] && independent=DeepSeek
+    [[ $codex == ok ]] && independent=Codex
+    printf '# Walls before the run\n\n- CodeRabbit: %s\n- Codex: %s\n- DeepSeek: %s\n- Independent review by: %s\n' \
+      "$coderabbit" "$codex" "$deepseek" "$independent" > "$record"
+    cat "$record"
+    [[ $coderabbit == ok && $independent != none ]]
+    ;;
+  continued)
+    printf '\n**A person chose to run with the walls above down.**\n' >> "$record"
+    ;;
+  *)
+    sed -n '2,13p' "$0"; exit 64 ;;
+esac

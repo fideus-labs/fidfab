@@ -12,6 +12,7 @@ digraph FidfabMedium {
   exit  [shape=Msquare,  label="Exit"]
 
   bootstrap [import="components/bootstrap.fabro"]
+  preflight [import="components/preflight.fabro"]
   plan      [import="components/plan-with-files.fabro"]
   implement [label="Implement approved plan (Claude fable)", class="claude fable implement",
              backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
@@ -29,7 +30,7 @@ digraph FidfabMedium {
   history    [import="components/logical-commits.fabro"]
   done       [shape=diamond, label="Done"]
 
-  start -> bootstrap -> plan -> implement -> has_changes
+  start -> bootstrap -> preflight -> plan -> implement -> has_changes
   has_changes -> coverage [label="has-changes"]
   has_changes -> done     [label="no-changes"]
   coverage -> coderabbit -> codex -> claude -> security -> personal -> ship -> steward

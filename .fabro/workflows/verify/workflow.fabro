@@ -12,6 +12,7 @@ digraph FidfabVerify {
   exit  [shape=Msquare,  label="Exit"]
 
   bootstrap [import="components/bootstrap.fabro"]
+  preflight [import="components/preflight.fabro"]
 
   has_changes [label="Branch has changes?", script="fidfab-diff --has-changes", output_schema="routing"]
   coverage   [import="components/coverage.fabro"]
@@ -25,7 +26,7 @@ digraph FidfabVerify {
   history    [import="components/logical-commits.fabro"]
   done       [shape=diamond, label="Done"]
 
-  start -> bootstrap -> has_changes
+  start -> bootstrap -> preflight -> has_changes
   has_changes -> coverage [label="has-changes"]
   has_changes -> done     [label="no-changes"]
   coverage -> coderabbit -> codex -> claude -> security -> personal -> ship -> steward

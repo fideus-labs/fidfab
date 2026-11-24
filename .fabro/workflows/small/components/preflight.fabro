@@ -1,0 +1,39 @@
+// Component: preflight
+// Before a run spends anything, each wall's tool is tried for real: CodeRabbit logged in,
+// Codex and DeepSeek answering. Their state goes to .fidfab/reviews/preflight.md. A wall is
+// down when CodeRabbit is (Claude's built-in review would stand in for it) or when neither
+// Codex nor DeepSeek answers (no independent review): the run then stops at a gate. Codex
+// alone down is only recorded, since DeepSeek reviews in its place (codex-review.fabro).
+digraph Preflight {
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Exit"]
+
+  coderabbit    [label="CodeRabbit logged in?", script="fidfab-walls coderabbit", retry_policy="none"]
+  codex         [label="Codex answers? (Codex terra)", class="codex terra verify",
+                 backend="acp", acp.command="fidfab-codex-acp --model terra --effort medium",
+                 prompt="@prompts/preflight-codex.md", retry_policy="none"]
+  codex_down    [label="Codex did not answer", script="fidfab-walls down codex"]
+  deepseek      [label="DeepSeek answers?", class="deepseek verify", model="deepseek-v4-pro", provider="deepseek",
+                 reasoning_effort="medium", prompt="@prompts/preflight-deepseek.md", retry_policy="none"]
+  deepseek_down [label="DeepSeek did not answer", script="fidfab-walls down deepseek"]
+  verdict       [label="Are the walls up?", script="fidfab-walls verdict", retry_policy="none"]
+  gate          [shape=hexagon,
+                 label="A wall is down before the run (see the verdict above): CodeRabbit is not logged in, or neither Codex nor DeepSeek answers. Re-check once it is fixed, or run with it down, which .fidfab/reviews/preflight.md and the report will say. Typed text re-checks."]
+  continued     [label="Record the walls a person ran without", script="fidfab-walls continued"]
+  done          [shape=diamond, label="Walls checked"]
+
+  start -> coderabbit -> codex
+  codex -> codex_down [condition="outcome=failed"]
+  codex -> deepseek
+  codex_down -> deepseek
+  deepseek -> deepseek_down [condition="outcome=failed"]
+  deepseek -> verdict
+  deepseek_down -> verdict
+  verdict -> gate [condition="outcome=failed"]
+  verdict -> done
+  gate -> coderabbit [label="[R] Re-check the walls"]
+  gate -> continued  [label="[C] Run with these walls down"]
+  gate -> coderabbit [freeform=true]  // typed text never runs past a wall
+  continued -> done
+  done -> exit
+}
