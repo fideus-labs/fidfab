@@ -22,6 +22,23 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 repo_url="${1:-}"
 repo_ref="${2:-main}"
 image="${3:-${FIDFAB_IMAGE:-fidfab:latest}}"
+# A host whose git rewrites this URL (url.<base>.insteadOf, commonly git@github.com: to
+# https://github.com/ where GitHub does not know the SSH key) can fetch what the image cannot:
+# the rewrite is not in the image. Take the rewritten URL when it is plain HTTPS (no
+# credentials in it: build args stay in the image) and reads anonymously, which is all the
+# clone step has for it; otherwise keep the given one (a private repository over the
+# ssh-agent). The probe runs outside any repository, without git config and without a home
+# (libcurl reads ~/.netrc), so no helper, header or netrc of this host answers for it.
+if [[ -n "$repo_url" ]]; then
+  resolved_url="$(git ls-remote --get-url -- "$repo_url" 2>/dev/null || true)"
+  if [[ "$resolved_url" != "$repo_url" && "$resolved_url" =~ ^https://[^/@]+/ ]] \
+    && (cd / && env -u GIT_CONFIG_COUNT -u GIT_CONFIG_PARAMETERS -u GIT_DIR -u NETRC HOME=/dev/null \
+          GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ASKPASS='' SSH_ASKPASS='' \
+          git -c credential.helper= ls-remote -- "$resolved_url" HEAD >/dev/null 2>&1); then
+    echo "git config rewrites $repo_url to $resolved_url, which reads without credentials: cloning that"
+    repo_url="$resolved_url"
+  fi
+fi
 
 args=(
   --file "$here/docker/Dockerfile"
