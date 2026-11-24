@@ -23,7 +23,7 @@ cat > "$tmp/stub/coderabbit" <<'EOF'
 #!/bin/sh
 case "$1 $2" in
   "auth login") touch "$HOME/logged-in"; echo login >> "$HOME/calls" ;;
-  "review --agent") printf '%s\n' "$CR_REVIEW" ;;
+  "review --agent") printf '%s\n' "$CR_REVIEW"; echo "$*" > "$HOME/review-args" ;;
   "auth status") if [ -e "$HOME/logged-in" ]; then echo '{"status":"authenticated","authenticated":true}'
                  else echo '{"status":"not_authenticated","authenticated":false}'; fi ;;
 esac
@@ -75,6 +75,18 @@ check "coderabbit review: a finished review is saved and passes" \
 check "coderabbit review: a review a usage limit ended fails" \
   "$(run "$tmp/h1" CR_REVIEW='{"type":"error","phase":"review","status":"rate_limited"}' -- fidfab-coderabbit review >/dev/null || echo "exit $?")" \
   "exit 1"
+
+# The review starts from run.env's merge base when it is a commit of the branch (a fork has no local fidlab-scored),
+# else from the base branch.
+git -C "$tmp/h1" init -q && git -C "$tmp/h1" -c user.name=t -c user.email=t@t commit -q --allow-empty -m base
+mkdir -p "$tmp/h1/.fidfab" && printf 'FIDFAB_BASE_BRANCH=fidlab-scored\nFIDFAB_MERGE_BASE=%s\n' "$(git -C "$tmp/h1" rev-parse HEAD)" > "$tmp/h1/.fidfab/run.env"
+run "$tmp/h1" CR_REVIEW="$done_line" -- fidfab-coderabbit review >/dev/null
+check "coderabbit review: from the merge base's commit when run.env names one" \
+  "$(cat "$tmp/h1/review-args")" "review --agent --base-commit $(git -C "$tmp/h1" rev-parse HEAD)"
+printf 'FIDFAB_BASE_BRANCH=fidlab-scored\nFIDFAB_MERGE_BASE=%040d\n' 0 > "$tmp/h1/.fidfab/run.env"
+run "$tmp/h1" CR_REVIEW="$done_line" -- fidfab-coderabbit review >/dev/null
+check "coderabbit review: from the base branch when the merge base is no commit here" \
+  "$(cat "$tmp/h1/review-args")" "review --agent --base fidlab-scored"
 
 # fidfab-walls: a wall is down when CodeRabbit is logged out or no independent reviewer answers.
 walls() { # HOME WALLS_THAT_ANSWER...: the verdict's exit status and its reviewer line
