@@ -37,6 +37,7 @@ export IS_SANDBOX="${IS_SANDBOX:-1}"
 export DISABLE_AUTOUPDATER=1
 
 # Load refs recorded by fidfab-bootstrap so prompts can refer to them.
+[[ -f .fidfab/run.env ]] || fidfab-state restore || true   # a fork starts without .fidfab/
 [[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
 
 exec claude-agent-acp "$@"

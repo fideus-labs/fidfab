@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# fidfab-state — carries .fidfab/ across `fabro fork` and `fabro rewind`.
+#
+# .fidfab/ (run.env, the reviews, what a refused stage said) lives in the sandbox only, and a fork
+# or a rewind starts a fresh workspace at the chosen checkpoint. So after every stage a hook
+# (workflow.toml) notes the stage's checkpoint with a tarball of .fidfab/, pushed to origin as
+# refs/notes/fidfab/<run id>, and in the fork every helper that reads .fidfab/ restores it when
+# .fidfab/run.env is missing. Fabro 0.403 runs the hooks of a forked run seldom if at all (none
+# for its first stages, probe runs on 2026-11-24): the restore cannot be a hook, and the fork's own
+# checkpoints mostly have no note. The run id comes from the checkpoint's Fabro-Run trailer, hooks
+# see FABRO_RUN_ID=petri. Whoever can push to origin can write these notes, as they can the run
+# branch itself.
+#
+# Usage: fidfab-state save      after a stage; never fails it
+#        fidfab-state restore   exits 1 when there is no note to restore
+set -uo pipefail
+case "${1:-}" in
+  save)
+    run="$(git log -1 --format='%(trailers:key=Fabro-Run,valueonly)' HEAD 2>/dev/null | head -n1)"
+    # Not a checkpoint, or no run.env yet: before bootstrap, or a fork whose .fidfab/ is still to restore.
+    [[ "$run" =~ ^[0-9A-Za-z]+$ && -f .fidfab/run.env ]] || exit 0
+    ref="refs/notes/fidfab/$run"
+    # A failed push is made good by the next stage's, which carries every note of the run.
+    blob="$(tar czf - .fidfab | git hash-object -w --stdin)" &&
+      git -c user.name=fidfab -c user.email=fidfab@fideus.io notes --ref="$ref" add -f -C "$blob" HEAD &&
+      git push -q origin "$ref" ||
+      echo "fidfab-state: .fidfab/ not saved with $(git rev-parse --short HEAD); a fork from it starts without" >&2
+    exit 0 ;;
+  restore)
+    # Only in a run's sandbox, on fabro/run/<id>. The note of the closest checkpoint at or before HEAD:
+    # this run's checkpoints without one (a fork's) are passed over; a checkpoint of the run it was forked
+    # from without one is a failed save, and the notes before it are stale (the reviews of an older version,
+    # say), so the search ends there, as it does at a start checkpoint.
+    [[ "$(git branch --show-current 2>/dev/null)" =~ ^fabro/run/([0-9A-Za-z]+)$ ]] || exit 1
+    current="${BASH_REMATCH[1]}" fetched=" "
+    # Out of git before anything is restored or written: the checkpoints must not take .fidfab/.
+    grep -qxF '.fidfab/' .git/info/exclude 2>/dev/null || echo '.fidfab/' >> .git/info/exclude
+    while IFS=$'\x1f' read -r commit run subject; do
+      [[ "$run" =~ ^[0-9A-Za-z]+$ ]] || continue   # an agent's commit
+      ref="refs/notes/fidfab/$run"
+      [[ "$fetched" == *" $run "* ]] || { git fetch -q origin "+$ref:$ref" 2>/dev/null; fetched+="$run "; }
+      if git notes --ref="$ref" show "$commit" >/dev/null 2>&1; then
+        # What a stage of the fork already wrote stays: it is newer than the note.
+        git notes --ref="$ref" show "$commit" | tar xzf - --skip-old-files .fidfab || exit 1
+        echo "fidfab-state: .fidfab/ restored from the note of ${commit:0:9} ($run)" >&2
+        exit 0
+      fi
+      [[ "$run" == "$current" && "$subject" != "fabro($run): start ("* ]] || break
+    done < <(git log --first-parent -n 100 --format='%H%x1f%(trailers:key=Fabro-Run,valueonly,separator=%x2C)%x1f%s' 2>/dev/null)
+    echo "fidfab-state: no note to restore .fidfab/ from; the stages go on without it" >&2
+    exit 1 ;;
+  *) echo "usage: fidfab-state save|restore" >&2; exit 2 ;;
+esac

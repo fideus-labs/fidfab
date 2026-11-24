@@ -7,6 +7,7 @@
 # fidfab-bootstrap) to the working tree, so uncommitted work from an
 # implementation stage is included.
 set -euo pipefail
+[[ -f .fidfab/run.env ]] || fidfab-state restore || true   # a fork starts without .fidfab/
 [[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
 base="${FIDFAB_MERGE_BASE:-$(git merge-base HEAD origin/${FIDFAB_BASE_BRANCH:-main} 2>/dev/null || git rev-parse HEAD~1)}"
 

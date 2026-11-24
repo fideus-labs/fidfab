@@ -21,6 +21,7 @@
 #   work     threads await a reply (ungated), merge conflicts, or failed checks
 #   pending  checks still running, or every unresolved thread already ends with our reply
 set -euo pipefail
+[[ -f .fidfab/run.env ]] || fidfab-state restore || true   # a fork starts without .fidfab/
 [[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
 lib="$(dirname "$(readlink -f "$0")")/../lib/fidfab"
 out=.fidfab/reviews

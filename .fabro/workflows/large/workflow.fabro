@@ -35,7 +35,7 @@ digraph FidfabLarge {
   critique_blocked [shape=hexagon,
             label="Neither Codex nor DeepSeek could critique the roadmap: a usage limit, a login or another error (see the critique stages in the run's log). Retry once it is lifted, or continue without the critique, which .fidfab/reviews/roadmap-critique.md will say. Typed text retries."]
   critique_skipped [label="Record the skipped critique",
-            script="mkdir -p .fidfab/reviews && echo 'Roadmap critique skipped: neither Codex nor DeepSeek could critique the roadmap (a usage limit, a login or another error) and a person chose to continue without it.' > .fidfab/reviews/roadmap-critique.md"]
+            script="{ [ -f .fidfab/run.env ] || fidfab-state restore; }; mkdir -p .fidfab/reviews && echo 'Roadmap critique skipped: neither Codex nor DeepSeek could critique the roadmap (a usage limit, a login or another error) and a person chose to continue without it.' > .fidfab/reviews/roadmap-critique.md"]
   address  [label="Address critique (Claude fable)", class="claude fable plan",
             backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
             prompt="@components/prompts/roadmap-address-critique.md"]

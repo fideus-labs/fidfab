@@ -13,6 +13,7 @@
 # down is only recorded: DeepSeek then reviews in its place.
 set -euo pipefail
 
+[[ -f .fidfab/run.env ]] || fidfab-state restore || true   # a fork starts without .fidfab/
 walls=.fidfab/walls
 record=.fidfab/reviews/preflight.md
 mkdir -p "$walls" .fidfab/reviews

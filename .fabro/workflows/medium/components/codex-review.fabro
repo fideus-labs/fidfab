@@ -18,7 +18,7 @@ digraph CodexReview {
   blocked  [shape=hexagon,
             label="Neither Codex nor DeepSeek could review: a usage limit, a login or another error (see the review stages in the run's log). Retry once it is lifted, or continue without the review, which the review records will say. Another Codex account takes fabro secret set and a fork from before this review. Typed text retries."]
   skipped  [label="Record the skipped independent review",
-            script="mkdir -p .fidfab/reviews && echo 'Independent review skipped: neither Codex nor DeepSeek could review (a usage limit, a login or another error) and a person chose to continue without it. No independent finding was addressed.' | tee .fidfab/reviews/codex-review.md > .fidfab/reviews/codex-review-response.md"]
+            script="{ [ -f .fidfab/run.env ] || fidfab-state restore; }; mkdir -p .fidfab/reviews && echo 'Independent review skipped: neither Codex nor DeepSeek could review (a usage limit, a login or another error) and a person chose to continue without it. No independent finding was addressed.' | tee .fidfab/reviews/codex-review.md > .fidfab/reviews/codex-review-response.md"]
   address  [label="Verify & address (Claude opus)", class="claude opus verify",
             backend="acp", acp.command="fidfab-claude-acp --model opus --effort xhigh",
             prompt="@prompts/address-codex.md"]

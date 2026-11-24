@@ -22,6 +22,7 @@
 # The record lives in the sandbox the agent can write to: this catches mistakes and an
 # interrupted rewrite, not an agent that deliberately rewrites the record as well.
 set -euo pipefail
+[[ -f .fidfab/run.env ]] || fidfab-state restore || true   # a fork starts without .fidfab/
 file=.fidfab/reviews/history-tree
 cleared=.fidfab/reviews/pr-head
 tree() { git rev-parse --verify --quiet "$1^{tree}"; }

@@ -61,7 +61,8 @@ compute-heavy work (compilation, tests) uses the full local machine.
    stands in for CodeRabbit), which the records and the PR description say. Any other failed stage
    ends the run unless its component routes the failure (the steward tries again after the hour, a
    failed history rewrite is still verified, the personal-data audit runs when Codex cannot
-   decide); `fabro fork` resumes it from a checkpoint, with the secrets as they are now.
+   decide); `fabro fork` resumes it from a checkpoint, with the secrets as they are now and
+   `.fidfab/` as it was then ([Forks](#forks)).
 4. opus writes the commit, opens the PR with `gh pr create --fill`, then rewrites the title and
    body from the actual diff and task context.
 5. A steward loop (opus) addresses review threads, rebases on conflicts, fixes failing CI, then
@@ -420,6 +421,30 @@ this inside the sandbox and records it as `FIDFAB_PLAN_SLUG` in `.fidfab/run.env
 does not record `FIDFAB_PLAN_SLUG`: the agents then fall back to the plan directory the task
 already has, or `task`, and neither a `-I plan_slug=...` value nor the branch name is used.
 
+### Forks
+
+A stopped run goes on with `fabro fork <run> [checkpoint]` or `fabro rewind`. Either starts a
+fresh sandbox, cloned at the checkpoint, with the secrets as they are now. What `.fidfab/` held at
+that checkpoint (`run.env`, the reviews and the records of reviews that could not run) comes with
+it:
+- After each stage, `fidfab-state save` notes the stage's checkpoint with a tarball of `.fidfab/`
+  and pushes it to origin as `refs/notes/fidfab/<run id>`. It runs as a `stage_complete` and
+  `stage_failed` hook in each `workflow.toml`. `.fidfab/` stays out of the checkpoints through
+  `.git/info/exclude`, which `fidfab-bootstrap` writes, and the restore writes again in a fork.
+- In the fork, the first helper that finds `.fidfab/run.env` missing restores the note of the
+  checkpoint forked from. The fork's own checkpoints are passed over: Fabro 0.403 seldom runs the
+  hooks of a forked run, so they have no note.
+
+What the restore will not take:
+- A note older than a checkpoint of the forked run that has none. That checkpoint's save failed,
+  and the older note would be stale, the reviews of an earlier version say.
+- Anything from the run a new run started from.
+
+So a fork of a fork usually starts without `.fidfab/`, as every fork did before, and its gates
+say what is missing. The notes are as readable as the run branch: on a public repository, they
+are public. They stay on origin after the run; `git push origin --delete refs/notes/fidfab/<run id>`
+removes one.
+
 ### Review comments are untrusted
 
 Anyone can comment on a pull request in a public repository, and the steward's agent runs with
@@ -609,6 +634,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-review-wrappers.sh` | host, CI | after `fabro fork`, whose fresh sandbox missed bootstrap, `fidfab-codex-acp` writes `auth.json` (mode 600) from `CODEX_AUTH_JSON_B64` unless Codex has one and, signed in, answers `initialize` with no sign-in method, and `fidfab-coderabbit available` logs in again from `CODERABBIT_API_KEY` without touching it; `not_authenticated` without a key is unavailable; `fidfab-coderabbit review` saves the review and fails unless it completed; `fidfab-walls` finds a wall down when CodeRabbit is logged out or neither Codex nor DeepSeek answers (stubbed `codex-acp`/`coderabbit`) |
+| `tests/test-fork-state.sh` | host, CI | `fidfab-state save` notes a checkpoint (a commit with a `Fabro-Run:` trailer) with `.fidfab/` and pushes the note, and leaves any other commit alone; nothing before `run.env` exists, and leaves any other commit alone; in a fresh clone on `fabro/run/<id>`, as after `fabro fork`, a wrapper that reads `run.env` restores `.fidfab/` first, past the fork's own checkpoints without a note, keeps what the fork wrote and excludes `.fidfab/` from git; a note older than a failed save of the forked run, or of the run a new run started from, is not taken, and a note restores nothing outside `.fidfab/` (local bare origin). `validate-workflows.sh` checks that every `workflow.toml` has the hooks and the checkpoint exclusion |
 | `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert, routes gated runs to the screen, counts failed and pending legacy commit statuses, and records its label as `pr_status` and the head it checked in `pr-head`; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry (stubbed `gh`) |
 | `tests/test-logical-commits.sh` | host, CI | every workflow hands over from the PR steward to the history rewrite and to nothing else, and the rewrite leads on (not nowhere, not back to the steward), with node statements wrapped over lines read and any reference or edge the scanner cannot read failing; the rewrite runs only on `context.pr_status=done`; the stage is Claude opus at medium effort with `fidelity="truncate"`, and its prompt keeps the pull-request lookup without forks, the fetch-failure stop, the identical-tree-id checks (against GitHub and against the state before), the clean-work-tree checks with untracked files listed, the rule that GitHub moved only by checkpoints since the recorded commit or holds a recorded attempt (a push, rewording or rewind by someone else stops it), the leased force-push and the `Fabro-Run:` trailer; the agent sits between the `fidfab-history-tree record` and `verify` nodes (a failed record skips it), a failed verify stops at a human gate, and the helper records only when GitHub moved forward from the steward's cleared head along the checkout (a rewind or foreign push before the record fails), passes a code-preserving rewrite and fails changed code in HEAD or on the remote, another branch, and a pushed branch that disappeared |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |
