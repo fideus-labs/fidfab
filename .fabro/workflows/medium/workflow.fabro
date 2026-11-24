@@ -4,7 +4,9 @@
 // task_plan.md → implement the approved plan → verification pipeline →
 // PR → steward loop → history rewritten into logical commits.
 digraph FidfabMedium {
-  graph [max_node_visits=50, stall_timeout="2h", label="fidfab medium"]
+  // A failed stage ends the run (a usage limit too: fork once it is lifted); edges with
+  // condition="outcome=failed" still route the failures a component handles.
+  graph [max_node_visits=50, stall_timeout="2h", on_failure="exit", label="fidfab medium"]
 
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]

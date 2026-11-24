@@ -27,6 +27,8 @@ STUB
 for cli in claude codex; do
   printf '#!/usr/bin/env bash\necho "%s $*" >> "$FIDFAB_TEST_LOG"\n' "$cli" > "$tmp/bin/$cli"
 done
+# like the real one, a codex login leaves an auth.json behind
+echo '[[ "$1" == login && -n "${CODEX_HOME:-}" ]] && echo "{}" > "$CODEX_HOME/auth.json"; exit 0' >> "$tmp/bin/codex"
 chmod +x "$tmp/bin/"*
 export PATH="$tmp/bin:$PATH" HOME="$tmp/home" FIDFAB_TEST_LOG="$tmp/calls"
 
@@ -146,5 +148,15 @@ echo '{}' > "$CODEX_HOME/auth.json"
 FABRO_STUB_SECRETS=CODEX_AUTH_JSON_B64 scripts/setup.sh codex >/dev/null
 check "codex secret set, auth.json present -> refreshed from it" \
   "secret set --no-upgrade-check --value-stdin --description base64 of ~/.codex/auth.json (ChatGPT login or API key) CODEX_AUTH_JSON_B64"
+rm "$CODEX_HOME/auth.json"
+FABRO_STUB_SECRETS=CODEX_AUTH_JSON_B64 scripts/setup.sh --replace codex </dev/null >/dev/null
+check "--replace: codex secret set, no auth.json -> a new login, stored" \
+  "codex login --device-auth
+secret set --no-upgrade-check --value-stdin --description base64 of ~/.codex/auth.json (ChatGPT login or API key) CODEX_AUTH_JSON_B64"
+FABRO_STUB_SECRETS=CODERABBIT_API_KEY scripts/setup.sh coderabbit </dev/null >/dev/null
+check "coderabbit secret set -> kept" ""
+FABRO_STUB_SECRETS=CODERABBIT_API_KEY scripts/setup.sh --replace coderabbit </dev/null >/dev/null
+check "--replace: coderabbit secret set -> asked again" \
+  "secret set --no-upgrade-check --description CodeRabbit agentic API key for coderabbit review --agent CODERABBIT_API_KEY"
 
 exit "$fail"

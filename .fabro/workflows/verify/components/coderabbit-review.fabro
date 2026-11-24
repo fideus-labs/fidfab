@@ -1,8 +1,10 @@
 // Component: coderabbit-review
-// CodeRabbit CLI review with autonomous fixes by Claude (opus) following the
-// code-review skill's "4. Fix Issues (Autonomous Workflow)". If CodeRabbit is
-// unavailable, wait 3 minutes and retry once; then fall back to Claude Code's
-// built-in code review.
+// CodeRabbit CLI review, then autonomous fixes by Claude (opus) following the
+// code-review skill's "4. Fix Issues (Autonomous Workflow)". If CodeRabbit is not
+// logged in, wait 3 minutes and check once more. The review runs in a script node
+// that fails unless CodeRabbit finished it (a usage limit or a login error ends it
+// early). Either failure stops at a gate: retry once it is lifted, or continue with
+// Claude Code's built-in review, whose record says CodeRabbit did not review.
 digraph CodeRabbitReview {
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]
@@ -10,8 +12,11 @@ digraph CodeRabbitReview {
   check   [label="CodeRabbit available?",       script="fidfab-coderabbit available", retry_policy="none"]
   wait    [label="Wait 3 minutes",              shape=insulator, duration="3m"]
   recheck [label="CodeRabbit available? (retry)", script="fidfab-coderabbit available", retry_policy="none"]
+  run     [label="CodeRabbit review",           script="fidfab-coderabbit review", retry_policy="none"]
+  blocked [shape=hexagon,
+           label="CodeRabbit could not review: a usage limit, a login or the service (see the stages above). Retry once it is lifted, or continue with Claude's built-in review, which the review records will say. Another account takes fabro secret set and a fork from before this review. Typed text retries."]
 
-  review   [label="CodeRabbit review + fix (Claude opus)", class="claude opus review",
+  review   [label="Fix CodeRabbit's findings (Claude opus)", class="claude opus review",
             backend="acp", acp.command="fidfab-claude-acp --model opus --effort high",
             prompt="@prompts/coderabbit-review-fix.md"]
   fallback [label="Built-in review + fix (Claude opus)", class="claude opus review",
@@ -21,10 +26,15 @@ digraph CodeRabbitReview {
 
   start -> check
   check   -> wait     [condition="outcome=failed"]
-  check   -> review
+  check   -> run
   wait    -> recheck
-  recheck -> fallback [condition="outcome=failed"]
-  recheck -> review
+  recheck -> blocked  [condition="outcome=failed"]
+  recheck -> run
+  run     -> blocked  [condition="outcome=failed"]
+  run     -> review
+  blocked -> recheck  [label="[R] Retry CodeRabbit"]
+  blocked -> fallback [label="[C] Continue with Claude's built-in review"]
+  blocked -> recheck  [freeform=true]  // typed text never skips CodeRabbit
   review   -> done
   fallback -> done
   done -> exit

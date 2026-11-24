@@ -54,6 +54,11 @@ case "$effort" in
 esac
 
 export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+# A forked run starts in a fresh sandbox after bootstrap ran in another one: write the
+# credentials again from the secret. Its log goes to stderr, stdout carries ACP.
+if [[ -n "${CODEX_AUTH_JSON_B64:-}" && ! -f "$CODEX_HOME/auth.json" ]]; then
+  fidfab-bootstrap --credentials-only >&2 || true
+fi
 export NO_BROWSER=1
 export INITIAL_AGENT_MODE="${INITIAL_AGENT_MODE:-agent-full-access}"
 
@@ -64,4 +69,28 @@ export CODEX_CONFIG="$config"
 
 [[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
 
+# Fabro authenticates an agent that advertises a sign-in method, and only by API key. codex-acp always advertises one,
+# so a ChatGPT login failed at `authenticate` ("CODEX_API_KEY or OPENAI_API_KEY is not set"). Signed in already, the
+# agent advertises none, as Claude's adapter does: its answer to `initialize` loses its authMethods on the way out.
+if [[ -f "$CODEX_HOME/auth.json" ]]; then
+  exec node -e '
+const agent = require("child_process").spawn("codex-acp", process.argv.slice(1), {stdio: ["inherit", "pipe", "inherit"]});
+let rest = "";
+agent.stdout.setEncoding("utf8");  // a character split across two chunks decodes whole
+agent.stdout.on("data", chunk => {
+  const lines = (rest + chunk).split("\n");
+  rest = lines.pop();
+  for (const line of lines) {
+    let out = line;
+    try {
+      const message = JSON.parse(line);
+      if (Array.isArray(message?.result?.authMethods)) { message.result.authMethods = []; out = JSON.stringify(message); }
+    } catch {}
+    process.stdout.write(out + "\n");
+  }
+});
+for (const signal of ["SIGTERM", "SIGINT"]) process.on(signal, () => agent.kill(signal));
+agent.on("close", code => { if (rest) process.stdout.write(rest); process.exitCode = code ?? 1; });  // exits once stdout drains
+' -- "$@"
+fi
 exec codex-acp "$@"

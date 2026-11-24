@@ -58,6 +58,7 @@ digraph PRSteward {
   publish -> wait
   publish -> preview  [condition="outcome=failed"]  // refused or failed: show the human again
   steward -> wait
+  steward -> wait    [condition="outcome=failed"]  // a usage limit or another failure: try again after the hour
   wait    -> status
   done    -> exit
 }

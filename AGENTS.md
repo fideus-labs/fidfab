@@ -40,6 +40,9 @@ a Docker sandbox image and tests. Keep the following in mind.
   `docker/config/codex-config.toml`.
 - `tests/test-pr-steward.sh` must pass after any change to `fidfab-pr-status`,
   `fidfab-pr-reply` or `quote.jq`.
+- `tests/test-review-wrappers.sh` must pass after any change to `fidfab-codex-acp`,
+  `fidfab-coderabbit` or the credential step of `fidfab-bootstrap`.
+- Every workflow graph sets `on_failure="exit"` (`validate-workflows.sh` checks it).
 - `shellcheck -S warning` on all shell scripts; `node --check tests/acp-smoke.mjs`.
 - If `docker` is available, `docker/build.sh && tests/test-image.sh` is the full check.
 
@@ -49,6 +52,17 @@ a Docker sandbox image and tests. Keep the following in mind.
   `diamond` conditional, `script=` command node, `backend="acp"` + `acp.command=` for
   Claude Code / Codex. Use `output_schema="routing"` on nodes that pick the next edge.
 - Every node with labelled (conditional) edges needs one unlabelled fallback edge.
+- A failed node hands on to its unconditional edge unless `on_failure` says otherwise. The
+  graph-level `on_failure="exit"` reaches imported nodes too (imports are merged at parse time;
+  checked with a probe run on 2026-11-23), and an explicit `condition="outcome=failed"` edge
+  still wins: a stage meant to go on after a failure needs one.
+- Fabro authenticates an ACP agent whose `initialize` lists `authMethods`, and only with an
+  `api-key` method. codex-acp always lists one, so `fidfab-codex-acp` empties the list when
+  `auth.json` exists (a ChatGPT login, or an API key in it); Claude's adapter lists none.
+- A usage limit (Claude, Codex, CodeRabbit) is a failed node like any other: Fabro does not
+  classify ACP failures, and its retries wait at most 60 s. A run keeps the secrets it started
+  with (`resume` too); another account takes `fabro secret set` and `fabro fork`, whose fresh
+  sandbox the wrappers re-credential from the environment.
 - An imported component's `exit` must have exactly one predecessor; funnel through a
   `done` diamond.
 - `@prompt` paths inside components are resolved relative to the importing workflow

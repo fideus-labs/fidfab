@@ -1,19 +1,21 @@
 # CodeRabbit review and autonomous fix
 
 Use the **code-review** skill (CodeRabbit CLI) and follow its section
-"4. Fix Issues (Autonomous Workflow)". The implementation is already in the working
-tree, so start at the review step:
+"4. Fix Issues (Autonomous Workflow)". The previous stage ran CodeRabbit on this branch
+and saved its complete review to `.fidfab/reviews/coderabbit.md`, so start from the findings:
 
-1. Run `fidfab-coderabbit review` (this calls `coderabbit review --agent` against the base
-   branch) and save the raw output to `.fidfab/reviews/coderabbit.md`.
-2. Create a task list from the findings.
-3. Fix the actionable issues within the scope of this branch, prioritising critical and
+1. Read the findings in `.fidfab/reviews/coderabbit.md` and create a task list from them.
+2. Fix the actionable issues within the scope of this branch, prioritising critical and
    major findings. Verify each fix with the repository's tests and linters.
-4. Re-run the review to confirm the fixes. Repeat at most twice more.
-5. Write `.fidfab/reviews/coderabbit-response.md` recording, per finding: severity,
-   decision (fixed / fixed-differently / not-an-issue / deferred) and the evidence.
+3. Re-run `fidfab-coderabbit review` to confirm the fixes (it rewrites `coderabbit.md` with
+   the new review; your task list keeps the first).
+   Repeat at most twice more.
+4. Write `.fidfab/reviews/coderabbit-response.md` recording, per finding of the first
+   review: severity, decision (fixed / fixed-differently / not-an-issue / deferred) and
+   the evidence.
 
-If the CodeRabbit CLI reports a rate limit or authentication failure, say so clearly at
-the top of `.fidfab/reviews/coderabbit-response.md` and finish; do not invent findings.
+If a confirming re-run fails (a usage limit or a login error), say at the top of
+`.fidfab/reviews/coderabbit-response.md` that the fixes were not confirmed by CodeRabbit,
+and finish; do not invent findings.
 
 {% include "partials/workspace.md" %}
