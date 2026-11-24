@@ -94,6 +94,13 @@ a Docker sandbox image and tests. Keep the following in mind.
   A stage's `GITHUB_TOKEN` is fixed at spawn while Fabro renews only its git credential store, so
   `docker/rootfs/usr/local/bin/gh` wraps `/usr/bin/gh` to read the token from that store;
   `tests/test-tools.sh` checks it.
+- `fabro install github` only registers a new App. An existing one takes
+  `[server.integrations.github]` written by hand (`strategy = "app"`, `app_id` as a string,
+  `client_id`, `slug`) and the vault secrets `GITHUB_APP_PRIVATE_KEY` (`--type file`, base64
+  PEM), `GITHUB_APP_CLIENT_SECRET` and `GITHUB_APP_WEBHOOK_SECRET`; `fabro doctor` then runs its
+  GitHub App check in place of the token one (probe server with a made-up App, 2026-11-24).
+  `fabro secret set NAME` without a value needs a terminal. `scripts/setup.sh github-app` does
+  all of it.
 - Fabro commits a checkpoint after every node (`fabro(<run id>): <node> (<status>)`, empty
   when the node changed nothing) and pushes `fabro/run/<id>` each time, without updating
   `origin/<branch>` in the sandbox: `git fetch` before comparing with the remote. No node

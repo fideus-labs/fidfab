@@ -12,15 +12,18 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/bin" "$tmp/home"
 cat > "$tmp/bin/fabro" <<'STUB'
 #!/usr/bin/env bash
-[[ "$1" == install || "$1 ${2:-}" == "secret set" || "$1 ${2:-}" == "server restart" ]] && printf '%s\n' "$*" >> "$FIDFAB_TEST_LOG"
+[[ "$1" == install || "$1 ${2:-}" == "secret set" || "$1 ${2:-}" == "secret rm" || "$1 ${2:-}" == "server restart" ]] && printf '%s\n' "$*" >> "$FIDFAB_TEST_LOG"
 [[ "$*" == *--value-stdin* ]] && cat >/dev/null # else the writer can die of SIGPIPE under pipefail
 [[ "$1 ${2:-}" == "secret list" ]] && for n in ${FABRO_STUB_SECRETS:-}; do printf '    "name": "%s",\n' "$n"; done
 [[ "$*" == *--non-interactive* && -n "${FABRO_STUB_FAIL_SCRIPTED:-}" ]] && exit 2
+[[ "$1 ${2:-}" == "secret set" && -n "${FABRO_STUB_FAIL_SECRET:-}" ]] && exit 1
 [[ "$1" == --version ]] && echo "fabro 0.0.0-stub"
 exit 0
 STUB
 cat > "$tmp/bin/gh" <<'STUB'
 #!/usr/bin/env bash
+# github-app's lookup of an existing App is the one call that asks for client_id
+[[ "$*" == *client_id* ]] && { [[ -n "${GH_STUB_APP:-}" ]] && echo "$GH_STUB_APP"; exit; }
 [[ -n "${GH_STUB_LOGIN:-}" ]] && { echo "$GH_STUB_LOGIN"; exit 0; }
 exit 1
 STUB
@@ -160,20 +163,63 @@ check "--replace: coderabbit secret set -> asked again" \
   "secret set --no-upgrade-check --description CodeRabbit agentic API key for coderabbit review --agent CODERABBIT_API_KEY"
 
 # github-app registers an App for the organization typed in (or the user's own account) unless
-# Fabro already uses one, and then gives the App's own addresses for the two missing permissions.
+# Fabro already uses one, and then gives the App's own addresses for its permissions.
 mkdir -p "$tmp/apphome/.fabro"
 # Only [server.integrations.github] counts, not a key of the same name in another table.
 printf '[server.integrations.slack]\nstrategy = "app"\n[server.integrations.github]\nstrategy = "token"\n' \
   > "$tmp/apphome/.fabro/settings.toml"
-echo acme | HOME="$tmp/apphome" scripts/setup.sh github-app >/dev/null
+printf '\nacme\n' | HOME="$tmp/apphome" scripts/setup.sh github-app >/dev/null
 check "github-app registers an organization's App" \
   "install github --no-upgrade-check --non-interactive --strategy app --owner org:acme"
 echo | HOME="$tmp/apphome" scripts/setup.sh github-app >/dev/null
 check "... or one for the user's own account" \
   "install github --no-upgrade-check --non-interactive --strategy app --owner personal"
-if ! echo 'acme; rm -rf /' | HOME="$tmp/apphome" scripts/setup.sh github-app >/dev/null 2>&1; then
+if ! printf '\nacme; rm -rf /\n' | HOME="$tmp/apphome" scripts/setup.sh github-app >/dev/null 2>&1; then
   echo "ok   github-app refuses an invalid organization name"; else echo "FAIL github-app accepted an invalid name"; fail=1; fi
 check "... without registering" ""
+# A slug at the first prompt adopts that App instead of registering one: its IDs and owner from
+# GitHub, a key and secrets into the vault, then the settings table (comments and other tables
+# kept). Unless gh can read the App and the file is a private key, Fabro is left as it was.
+printf -- '-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----\n' > "$tmp/key.pem"
+printf '# kept\n[server.integrations.github] # token\nstrategy = "token"\n\n# web\n[server.web]\nenabled = true\n' \
+  > "$tmp/apphome/.fabro/settings.toml"
+adopt() { printf '%s\n%s\n' "${2:-acme-bot}" "$1" | HOME="$tmp/apphome" scripts/setup.sh github-app 2>&1; }
+on_token() { grep -qxF 'strategy = "token"' "$tmp/apphome/.fabro/settings.toml"; }
+if ! adopt "$tmp/key.pem" >/dev/null && ! GH_STUB_APP="123456 Iv1.abc acme" adopt /dev/null >/dev/null &&
+   ! GH_STUB_APP="123456  acme" adopt "$tmp/key.pem" >/dev/null && # an App that shows no client ID
+   ! GH_STUB_APP="123456 Iv1.abc acme" adopt "$tmp/key.pem" 'acme bot;' >/dev/null && on_token; then
+  echo "ok   github-app refuses an App gh cannot read, a bad slug and a file that is not a private key"
+else echo "FAIL github-app adopted an App it could not read, a bad slug or a bad key file"; fail=1; fi
+check "... storing nothing" ""
+# The settings change last: a secret that fails to store leaves Fabro on the token strategy.
+if ! FABRO_STUB_FAIL_SECRET=1 GH_STUB_APP="123456 Iv1.abc acme" adopt "$tmp/key.pem" >/dev/null && on_token; then
+  echo "ok   github-app keeps the token strategy when a secret fails to store"
+else echo "FAIL github-app switched strategy although a secret failed to store"; fail=1; fi
+: > "$FIDFAB_TEST_LOG"
+out="$(GH_STUB_APP="123456 Iv1.abc acme" adopt "$tmp/key.pem")"
+check "github-app adopts an existing App: key and secrets in, gh token out, a restart, no registration" \
+  "secret set --no-upgrade-check --type file --value-stdin --description private key of the GitHub App acme-bot GITHUB_APP_PRIVATE_KEY
+secret set --no-upgrade-check --description client secret of the GitHub App acme-bot GITHUB_APP_CLIENT_SECRET
+secret set --no-upgrade-check --value-stdin --description random: fidfab takes no GitHub webhooks GITHUB_APP_WEBHOOK_SECRET
+secret rm --no-upgrade-check GITHUB_TOKEN
+server restart --no-upgrade-check"
+want=$'# kept\n[server.integrations.github]\nstrategy = "app"\napp_id = "123456"\nclient_id = "Iv1.abc"\nslug = "acme-bot"\n\n# web\n[server.web]\nenabled = true'
+if [[ "$(cat "$tmp/apphome/.fabro/settings.toml")" == "$want" &&
+      "$out" == *"https://github.com/organizations/acme/settings/apps/acme-bot and"* &&
+      "$out" == *"https://github.com/apps/acme-bot/installations/new"* ]]; then
+  echo "ok   github-app points the settings at the adopted App and names its pages"
+else echo "FAIL github-app adopted settings: $(cat "$tmp/apphome/.fabro/settings.toml") / $out"; fail=1; fi
+# Settings without the table get it appended; a personal App's page; a key path under ~.
+printf '[server.web]\nenabled = true\n' > "$tmp/apphome/.fabro/settings.toml"
+cp "$tmp/key.pem" "$tmp/apphome/key.pem"
+# shellcheck disable=SC2088  # the literal ~ is what the step has to expand
+out="$(GH_STUB_APP="123456 Iv1.abc " adopt '~/key.pem')"
+want=$'[server.web]\nenabled = true\n\n[server.integrations.github]\nstrategy = "app"\napp_id = "123456"\nclient_id = "Iv1.abc"\nslug = "acme-bot"'
+if [[ "$(cat "$tmp/apphome/.fabro/settings.toml")" == "$want" &&
+      "$out" == *"https://github.com/settings/apps/acme-bot and"* ]]; then
+  echo "ok   github-app appends the table when there is none, for a personal App and a ~ key path"
+else echo "FAIL github-app appended settings: $(cat "$tmp/apphome/.fabro/settings.toml") / $out"; fail=1; fi
+: > "$FIDFAB_TEST_LOG"
 printf '[server.integrations.github]\nstrategy = \047app\047  # set by hand\nslug = "fabro-acme"\n' \
   > "$tmp/apphome/.fabro/settings.toml"
 out="$(HOME="$tmp/apphome" scripts/setup.sh github-app </dev/null)"

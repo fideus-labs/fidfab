@@ -15,8 +15,8 @@
 #   coderabbit   CodeRabbit CLI agentic API key
 #   environment  register the "fidfab" Docker environment with the local server
 #   doctor       fabro doctor
-#   github-app   switch Fabro to a GitHub App, so each run gets a token for its own repository
-#                (not among the default steps; docs/github-token.md)
+#   github-app   switch Fabro to a GitHub App, a new one or one that exists, so each run gets a
+#                token for its own repository (not among the default steps; docs/github-token.md)
 #
 # Nothing here writes credentials to disk outside Fabro's vault (and the
 # CLIs' own login stores on this machine).
@@ -130,6 +130,55 @@ ensure_dev_token_auth() {
   printf '%s\n' "$out" > "$SETTINGS" # in place, keeping the file's mode
 }
 
+# use_github_app <app id> <client id> <slug>: point [server.integrations.github] in $SETTINGS at
+# that App, as Fabro's own registration writes it; comments and the other tables are kept.
+# shortcut: line-based, drops every key line of the table; Fabro's keys there are one-line scalars.
+use_github_app() {
+  local out
+  out="$(awk -v id="$1" -v client="$2" -v slug="$3" '
+    function block() { d = 1
+      printf "[server.integrations.github]\nstrategy = \"app\"\napp_id = \"%s\"\nclient_id = \"%s\"\nslug = \"%s\"\n", id, client, slug }
+    /^[[:space:]]*\[/ { s = ($0 ~ /^[[:space:]]*\[server\.integrations\.github\][[:space:]]*(#.*)?$/)
+      if (s) { block(); next } }
+    s && /^[[:space:]]*[^#[:space:]]/ { next }
+    { print } END { if (!d) { print ""; block() } }' "$SETTINGS")"
+  printf '%s\n' "$out" > "$SETTINGS" # in place, keeping the file's mode
+}
+
+# adopt_github_app <slug>: what `fabro install github` does for an App it registers, for one that
+# already exists: the App's IDs from GitHub into $SETTINGS, and a private key and client secret
+# generated for this server into the vault. [server.auth] is left alone.
+# Call it bare: under `||` or `if`, set -e would not stop it at a secret that failed to store.
+adopt_github_app() {
+  local slug="$1" app pem id client org
+  [[ "$slug" =~ ^[A-Za-z0-9-]+$ ]] || { note "Not an App slug: $slug"; return 1; }
+  # Its ID, client ID and, for an organization's App, the organization its settings page is under.
+  app="$(gh api "apps/$slug" --jq '"\(.id) \(.client_id // "") \(.owner | if .type == "Organization" then .login else "" end)"' 2>/dev/null || true)"
+  [[ "$app" =~ ^([0-9]+)\ ([A-Za-z0-9._-]+)\ ([A-Za-z0-9-]*)$ ]] \
+    || { note "gh cannot read the App $slug: check the slug, and that gh is logged in to an account that sees it."; return 1; }
+  id="${BASH_REMATCH[1]}" client="${BASH_REMATCH[2]}" org="${BASH_REMATCH[3]}"
+  note "App ID $id. Open https://github.com/${org:+organizations/$org/}settings/apps/$slug and"
+  note "generate a private key (GitHub downloads a .pem file) and a new client secret. An App"
+  note "holds several of each, so whatever uses it today keeps working."
+  read -rp "  Path of the downloaded .pem file: " pem || true
+  pem="${pem/#\~/$HOME}"
+  grep -qs -- '-----BEGIN .*PRIVATE KEY-----' "$pem" || { note "Not a private key file: $pem"; return 1; }
+  base64 -w0 < "$pem" | fabro secret set --no-upgrade-check --type file --value-stdin \
+    --description "private key of the GitHub App $slug" GITHUB_APP_PRIVATE_KEY
+  note "Stored the private key in Fabro's vault; delete $pem."
+  fabro secret set --no-upgrade-check --description "client secret of the GitHub App $slug" GITHUB_APP_CLIENT_SECRET
+  # fabro doctor wants a webhook secret too; fidfab takes no webhooks, so nobody has to know it.
+  head -c 32 /dev/urandom | base64 -w0 | fabro secret set --no-upgrade-check --value-stdin \
+    --description "random: fidfab takes no GitHub webhooks" GITHUB_APP_WEBHOOK_SECRET
+  # Last, so a failure above leaves Fabro on the strategy it had.
+  use_github_app "$id" "$client" "$slug"
+  note "Pointed [server.integrations.github] in $SETTINGS at the App $slug."
+  # As Fabro's own switch does: the token strategy's copy of the gh login has no use any more.
+  fabro secret rm --no-upgrade-check GITHUB_TOKEN >/dev/null 2>&1 || true
+  fabro server restart --no-upgrade-check >/dev/null 2>&1 \
+    || note "WARNING: fabro server restart failed; run it yourself so the server reads the change."
+}
+
 step_github_app() {
   bold "GitHub App: each run gets a token for its own repository (docs/github-token.md)"
   [[ -f "$SETTINGS" ]] || { note "No $SETTINGS yet: run scripts/setup.sh fabro first."; return 1; }
@@ -137,13 +186,18 @@ step_github_app() {
   if [[ "$(github_setting strategy)" == app ]]; then
     note "Fabro already uses a GitHub App; not registering another."
   else
-    read -rp "  Organization that owns the target repositories (empty: your own account): " org || true
-    if [[ -z "$org" ]]; then owner=personal
-    elif [[ "$org" =~ ^[A-Za-z0-9-]+$ ]]; then owner="org:$org"
-    else note "Not an organization name: $org"; return 1; fi
-    note "Needs gh logged in here, and an organization owner for an organization's App. Open the"
-    note "URL it prints in a browser on this machine (or forward its port over SSH)."
-    fabro install github --no-upgrade-check --non-interactive --strategy app --owner "$owner"
+    read -rp "  Slug of an existing GitHub App to use (empty: register a new one): " slug || true
+    if [[ -n "$slug" ]]; then
+      adopt_github_app "$slug"
+    else
+      read -rp "  Organization that owns the target repositories (empty: your own account): " org || true
+      if [[ -z "$org" ]]; then owner=personal
+      elif [[ "$org" =~ ^[A-Za-z0-9-]+$ ]]; then owner="org:$org"
+      else note "Not an organization name: $org"; return 1; fi
+      note "Needs gh logged in here, and an organization owner for an organization's App. Open the"
+      note "URL it prints in a browser on this machine (or forward its port over SSH)."
+      fabro install github --no-upgrade-check --non-interactive --strategy app --owner "$owner"
+    fi
   fi
   if ensure_dev_token_auth; then
     note "Added \"dev-token\" to [server.auth] methods in $SETTINGS: the CLI logs in with it,"
@@ -156,15 +210,16 @@ step_github_app() {
   [[ -n "$slug" ]] || { note "No App slug in $SETTINGS; finish with docs/github-token.md."; return 0; }
   # An organization's App has its settings under the organization.
   login="${org:-$(gh api "apps/$slug" --jq '.owner | select(.type == "Organization") | .login' 2>/dev/null || true)}"
-  note "Fabro registers its App without two permissions every fidfab workflow requests; until it"
-  note "has them, every run fails at its first stage."
+  note "Every fidfab workflow requests the repository permissions below, and a run fails at its"
+  note "first stage while the App lacks one. Fabro registers its App without the last two."
   if [[ -n "$login" ]]; then
     note "1. https://github.com/organizations/$login/settings/apps/$slug/permissions"
   else
     note "1. https://github.com/settings/apps/$slug/permissions"
     note "   (an organization's App: https://github.com/organizations/ORG/settings/apps/$slug/permissions)"
   fi
-  note "   Repository permissions: Actions and Commit statuses Read-only, Workflows No access; Save changes."
+  note "   Repository permissions: Contents, Pull requests and Issues Read and write; Checks, Actions"
+  note "   and Commit statuses Read-only or more; leave the rest; Save changes."
   note "2. https://github.com/apps/$slug/installations/new"
   note "   Only select repositories: the ones you run fidfab on; Install. If it was installed before"
   note "   step 1, accept the permission request under the installation's Configure."
