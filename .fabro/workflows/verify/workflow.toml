@@ -84,3 +84,19 @@ permissions = { contents = "write", pull_requests = "write", issues = "write", c
 # fidfab-bootstrap deepens the history and attaches the image's warm caches.
 [run.clone]
 enabled = true
+
+# .fidfab/ travels with the checkpoints as git notes: a fork or a rewind starts a fresh workspace, where the
+# helpers restore it (README, "Forks"). It stays out of them through .git/info/exclude (fidfab-bootstrap,
+# fidfab-state): naming it here too fails every checkpoint once it is ignored. Fabro's hook context files stay out here.
+[run.checkpoint]
+exclude_globs = [".fabro-hook-context-*.json"]
+
+[[run.hooks]]
+event = "stage_complete"
+script = "fidfab-state save || true"   # an image older than fidfab-state saves nothing, and blocks nothing
+blocking = true
+
+[[run.hooks]]
+event = "stage_failed"
+script = "fidfab-state save || true"   # an image older than fidfab-state saves nothing, and blocks nothing
+blocking = true

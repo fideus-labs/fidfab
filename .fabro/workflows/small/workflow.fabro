@@ -15,6 +15,7 @@ digraph FidfabSmall {
   exit  [shape=Msquare,  label="Exit"]
 
   bootstrap [import="components/bootstrap.fabro"]
+  preflight [import="components/preflight.fabro"]
   implement [label="Implement (Claude fable)", class="claude fable implement",
              backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
              prompt="@components/prompts/implement-small.md"]
@@ -31,7 +32,7 @@ digraph FidfabSmall {
   history    [import="components/logical-commits.fabro"]
   done       [shape=diamond, label="Done"]
 
-  start -> bootstrap -> implement -> has_changes
+  start -> bootstrap -> preflight -> implement -> has_changes
   has_changes -> coverage [label="has-changes"]
   has_changes -> done     [label="no-changes"]
   coverage -> coderabbit -> codex -> claude -> security -> personal -> ship -> steward

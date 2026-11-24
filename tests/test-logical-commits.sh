@@ -408,7 +408,7 @@ may_continue && fail "rewrite: step 1.5 accepts a foreign rewording of the branc
 # from the head the steward cleared, along this checkout; then a code-preserving rewrite
 # passes and changed code on either side fails.
 ht="$here/docker/rootfs/usr/local/bin/fidfab-history-tree"
-h() { (cd "$fix/work" && "$ht" "$@"); }
+h() { (cd "$fix/work" && PATH="${ht%/*}:$PATH" "$ht" "$@"); }
 cleared="$fix/work/.fidfab/reviews/pr-head"
 g checkout -q -B topic "$before"; g push -q --force origin topic
 h verify >/dev/null 2>&1 && fail "history-tree: verify passes without a recorded tree"

@@ -14,6 +14,15 @@ export PATH="$HOME/.fabro/bin:$PATH"
 for wf in "$here"/.fabro/workflows/*/workflow.fabro; do
   grep -qE '^ *graph \[.*on_failure="exit"' "$wf" || { echo "$wf: graph [...] lacks on_failure=\"exit\"" >&2; exit 1; }
 done
+# .fidfab/ is noted with each checkpoint, so that a fork finds it again.
+for toml in "$here"/.fabro/workflows/*/workflow.toml; do
+  # exclude_globs keeps Fabro's hook context files out, and must not name .fidfab: an ignored path in it fails
+  # the checkpoint's git add.
+  [[ "$(grep -c '^script = "fidfab-state save' "$toml")" == 2 &&
+     "$(grep -c '^exclude_globs = \[.*"\.fabro-hook-context-\*\.json"' "$toml")" == 1 ]] &&
+    ! grep -q '^exclude_globs = .*\.fidfab' "$toml" ||
+    { echo "$toml: lacks the fidfab-state hooks or the hook-file exclusion, or excludes .fidfab/ there" >&2; exit 1; }
+done
 command -v fabro >/dev/null || { echo "fabro not installed: curl -fsSL https://fabro.sh/install.sh | sh"; exit 1; }
 "$here/scripts/sync-components.sh" --check
 status=0

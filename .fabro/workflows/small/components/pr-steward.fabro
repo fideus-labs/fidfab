@@ -31,7 +31,7 @@ digraph PRSteward {
   preview [label="Preview replies", script="fidfab-pr-reply --preview", max_visits=200]
   approve [shape=hexagon, max_visits=200,
            label="The steward's replies and unpushed commits are above; none of them is posted or pushed yet. Post them, or type what to change."]
-  feedback [label="Record feedback", script="cat > .fidfab/reviews/steward-feedback.md",
+  feedback [label="Record feedback", script="{ [ -f .fidfab/run.env ] || fidfab-state restore </dev/null; }; mkdir -p .fidfab/reviews && cat > .fidfab/reviews/steward-feedback.md",
             stdin_source="human.gate.text", max_visits=200]
   revise  [label="Revise replies (Claude opus)", class="claude opus git",
            backend="acp", acp.command="fidfab-claude-acp --model opus --effort medium",

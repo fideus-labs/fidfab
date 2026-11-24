@@ -22,7 +22,8 @@ a Docker sandbox image and tests. Keep the following in mind.
 - `scripts/sync-components.sh --check` must pass.
 - `tests/test-effort-levels.sh` must pass after any change to an agent node. Every Claude Code,
   Codex and Gemini node sets its effort explicitly: Claude implementation and planning `xhigh`,
-  Claude and Codex review and security `high`, everything else `medium`. The test derives the
+  Claude and Codex review and security `high`, and DeepSeek's review where it stands in for
+  Codex; everything else `medium`. The test derives the
   level from the agent and the role word in the node's `class` (`implement`, `review`,
   `security`, `verify`, `plan`, `git`, `decision`), so every agent node carries exactly one; a
   node whose class does not decide its level goes in the test's `override` table, as the verify
@@ -41,8 +42,12 @@ a Docker sandbox image and tests. Keep the following in mind.
 - `tests/test-pr-steward.sh` must pass after any change to `fidfab-pr-status`,
   `fidfab-pr-reply` or `quote.jq`.
 - `tests/test-review-wrappers.sh` must pass after any change to `fidfab-codex-acp`,
-  `fidfab-coderabbit` or the credential step of `fidfab-bootstrap`.
-- Every workflow graph sets `on_failure="exit"` (`validate-workflows.sh` checks it).
+  `fidfab-coderabbit`, `fidfab-walls` or the credential step of `fidfab-bootstrap`.
+- `tests/test-fork-state.sh` must pass after any change to `fidfab-state` or to a helper that
+  reads `.fidfab/`; each such helper restores it first (`fidfab-state restore`) when `run.env` is missing.
+- Every workflow graph sets `on_failure="exit"`, and every `workflow.toml` has the
+  `fidfab-state save` hooks and excludes Fabro's hook context files from the checkpoints, never
+  `.fidfab/` (`validate-workflows.sh` checks both).
 - `shellcheck -S warning` on all shell scripts; `node --check tests/acp-smoke.mjs`.
 - If `docker` is available, `docker/build.sh && tests/test-image.sh` is the full check.
 
@@ -63,6 +68,19 @@ a Docker sandbox image and tests. Keep the following in mind.
   classify ACP failures, and its retries wait at most 60 s. A run keeps the secrets it started
   with (`resume` too); another account takes `fabro secret set` and `fabro fork`, whose fresh
   sandbox the wrappers re-credential from the environment.
+- A fork or a rewind clones the run branch at the checkpoint into a fresh workspace: nothing
+  outside git survives, `.fidfab/` and `.git/info/exclude` included. `fidfab-state` carries
+  `.fidfab/` in git notes. Hooks (Fabro 0.403, probe runs on 2026-11-24):
+  - `checkpoint_saved` never runs.
+  - `stage_complete` runs after the stage's checkpoint commit.
+  - A forked run runs its hooks seldom if at all (none for its first stages, `stage_start` reported
+    "no sandbox environment"), so the helpers restore, not a hook.
+  - Hooks see `FABRO_RUN_ID=petri`; the run id is the checkpoint's `Fabro-Run:` trailer.
+  - Each hook writes a `.fabro-hook-context-*.json` into the workspace, which checkpoints commit
+    unless `[run.checkpoint] exclude_globs` lists it. The server honours `exclude_globs` even
+    though `fabro validate` calls it ignored, but an ignored path named there fails the
+    checkpoint's `git add` ("paths are ignored"): `.fidfab/` is kept out by `.git/info/exclude`
+    alone, and every helper that writes it restores first, which writes that exclusion.
 - An imported component's `exit` must have exactly one predecessor; funnel through a
   `done` diamond.
 - `@prompt` paths inside components are resolved relative to the importing workflow

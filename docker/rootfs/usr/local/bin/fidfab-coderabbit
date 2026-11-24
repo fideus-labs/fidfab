@@ -10,6 +10,7 @@
 # Claude's built-in review.
 set -euo pipefail
 
+[[ -f .fidfab/run.env ]] || fidfab-state restore || true   # a fork starts without .fidfab/
 [[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
 base="${FIDFAB_BASE_BRANCH:-main}"
 

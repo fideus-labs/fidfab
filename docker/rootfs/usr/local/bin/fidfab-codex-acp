@@ -67,6 +67,7 @@ config="{\"model\":\"$model\",\"approval_policy\":\"never\",\"sandbox_mode\":\"d
 config="$config}"
 export CODEX_CONFIG="$config"
 
+[[ -f .fidfab/run.env ]] || fidfab-state restore || true   # a fork starts without .fidfab/
 [[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
 
 # Fabro authenticates an agent that advertises a sign-in method, and only by API key. codex-acp always advertises one,
