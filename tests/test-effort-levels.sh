@@ -3,7 +3,8 @@
 #
 # Policy: Claude implementation and planning stages run at xhigh, as do the verify and
 # address stages of the Claude and Codex reviews; Claude and Codex review stages run at
-# high, every other Claude and Codex stage at medium, and Gemini at medium. Every agent
+# high, and so does DeepSeek's review when it stands in for Codex; every other Claude,
+# Codex and DeepSeek stage at medium, and Gemini at medium. Every agent
 # node must set its effort explicitly so that no stage inherits an agent default, and
 # carry one role word in its class from which the expected level is derived.
 set -euo pipefail
@@ -27,13 +28,13 @@ roles="implement review security verify plan git decision"
 expected_effort() {
   case "$1:$2" in
     claude:implement | claude:plan) echo xhigh ;;
-    claude:review | claude:security | codex:review | codex:security) echo high ;;
+    claude:review | claude:security | codex:review | codex:security | deepseek:review) echo high ;;
     *) echo medium ;;
   esac
 }
 
 # Prints one line per agent node in the given DOT files:
-# <file> <node> <claude|codex|gemini|unknown-acp> <effort or -> <class words...>.
+# <file> <node> <claude|codex|deepseek|gemini|unknown-acp> <effort or -> <class words...>.
 scan_nodes() {
   awk '
     # A node is an agent when it has a prompt: an ACP node is Claude or Codex by its
@@ -55,14 +56,14 @@ scan_nodes() {
     function flush() {
       if (node != "" && prompt) {
         if (acp) agent = (cmd ~ /^fidfab-claude-acp( |$)/ ? "claude" : cmd ~ /^fidfab-codex-acp( |$)/ ? "codex" : "unknown-acp")
-        else agent = "gemini"
+        else agent = (prov == "deepseek" ? "deepseek" : "gemini")
         effort = "-"
         if (agent == "claude" || agent == "codex") {
           if (match(cmd, /(^| )--effort [^[:space:]"]+/)) { e = substr(cmd, RSTART, RLENGTH); sub(/^ ?--effort /, "", e); effort = e }
-        } else if (agent == "gemini" && rfx != "") effort = rfx
+        } else if (rfx != "") effort = rfx
         print FILENAME, node, agent, effort (cls == "" ? "" : " " cls)
       }
-      node = ""; prompt = 0; acp = 0; cmd = ""; rfx = ""; cls = ""
+      node = ""; prompt = 0; acp = 0; cmd = ""; rfx = ""; cls = ""; prov = ""
     }
     FNR == 1 { flush() }
     # Attributes are read from code only, in the spelling DOT allows: drop a // comment
@@ -79,6 +80,7 @@ scan_nodes() {
     /backend="acp"/ { acp = 1 }
     match($0, /acp\.command="[^"]*"/)      { cmd = substr($0, RSTART + 13, RLENGTH - 14) }
     match($0, /reasoning_effort="[^"]*"/)  { rfx = substr($0, RSTART + 18, RLENGTH - 19) }
+    match($0, /(^|[[:space:],\[])provider="[^"]*"/) { pv = substr($0, RSTART, RLENGTH); sub(/^.*provider="/, "", pv); sub(/"$/, "", pv); prov = pv }
     match($0, /(^|[[:space:],\[])class="[^"]*"/) { c = substr($0, RSTART, RLENGTH); sub(/^.*class="/, "", c); sub(/"$/, "", c); cls = c }
     END { flush() }
   ' "$@"
@@ -101,6 +103,7 @@ digraph T {
   norole [backend="acp", acp.command="fidfab-codex-acp --effort medium", prompt="@p.md"]
   gem [class="gemini review", prompt="@p.md"] // reasoning_effort="medium"
   gemok [class="gemini review", provider="litellm", reasoning_effort="medium", prompt="@p.md"]
+  deep [class="deepseek review", model="deepseek-v4-pro", provider="deepseek", reasoning_effort="high", prompt="@p.md"]
   spaced [backend = "acp", acp.command = "fidfab-claude-acp --effort medium", class = "claude review", prompt = "@p.md"]
   // ghost [backend="acp", acp.command="fidfab-claude-acp --effort medium", prompt="@p.md"]
   tool [script="true"]
@@ -117,6 +120,7 @@ lowrev claude medium claude review
 norole codex medium
 gem gemini - gemini review
 gemok gemini medium gemini review
+deep deepseek high deepseek review
 spaced claude medium claude review"
 [[ "$got" == "$want" ]] || { echo "FAIL: scanner self-test; got:" >&2; echo "$got" >&2; exit 1; }
 

@@ -47,7 +47,8 @@ compute-heavy work (compilation, tests) uses the full local machine.
                                    └── fidfab-* helpers (bootstrap, diff, pr-status, …)
 ```
 
-1. You start a run with a goal (`--goal "…"` or `--goal-file task.md`). For `medium` and
+1. You start a run with a goal (`--goal "…"` or `--goal-file task.md`). Before it spends anything, the
+   run tries each wall's tool (CodeRabbit, Codex, DeepSeek) and stops at a gate if one is down. For `medium` and
    `large`, a Claude Code (fable) session first produces planning documents and pauses at a
    human gate; you approve or type feedback, as many rounds as needed.
 2. Claude Code implements the approved plan in the sandbox.
@@ -101,7 +102,7 @@ Claude Code and Codex take the level from `--effort` on the node's `acp.command`
 |---|---|---|---|
 | `small` | One-shot prompt | none before implementation; steward review screening and reply approval | Branch, verified diff, PR, stewarded to green |
 | `medium` | `task_plan.md` / `findings.md` / `progress.md` via the [planning-with-files](https://github.com/OthmanAdi/planning-with-files) skill | plan approval loop; steward review screening and reply approval | Plan files committed with the implementation, PR |
-| `large` | Research-backed roadmap drafted interactively with Claude fable, critiqued by Codex terra | draft approval, final approval; steward review screening and reply approval | `docs/roadmap/**.md` work items with implementation plans and acceptance criteria, each sized for `medium`; PR |
+| `large` | Research-backed roadmap drafted interactively with Claude fable, critiqued by Codex terra (DeepSeek in its place when Codex fails; both failing stop at a gate) | draft approval, final approval; steward review screening and reply approval | `docs/roadmap/**.md` work items with implementation plans and acceptance criteria, each sized for `medium`; PR |
 | `verify` | Existing branch | steward review screening and reply approval | Verification pipeline only, PR and steward |
 
 The steward gates are on by default and only appear when a PR has review threads awaiting a
@@ -120,7 +121,8 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 | `bootstrap.fabro` | Materialises credentials, ensures the checkout (deepens Fabro's shallow clone, or clones from the image's baked-in repo), attaches warm caches, records base/head refs and the plan slug |
 | `coverage.fabro` | opus checks the diff for uncovered behaviour and adds tests |
 | `coderabbit-review.fabro` | `coderabbit review --agent` in a script node that fails unless the review completed; if CodeRabbit is not logged in it waits 3 minutes and checks again; a review that cannot run stops at a gate (retry, or Claude's built-in code review, recorded as such); opus fixes issues following section "4. Fix Issues (Autonomous Workflow)" of the [CodeRabbit code-review skill](https://github.com/coderabbitai/skills) |
-| `codex-review.fabro` | Codex (terra) review with the prioritised review prompt, then opus verifies and addresses, writing `docs/plans/<slug>/review-codex.md`; a failed review stops at a gate (retry, or continue without it, recorded in `.fidfab/reviews/`) |
+| `preflight.fabro` | Before the run spends anything, tries each wall's tool for real (CodeRabbit logged in, Codex and DeepSeek answering) and records their state in `.fidfab/reviews/preflight.md`; stops at a gate when CodeRabbit is down or no independent reviewer answers (re-check, or run with it down, recorded) |
+| `codex-review.fabro` | Codex (terra) review with the prioritised review prompt, then opus verifies and addresses, writing `docs/plans/<slug>/review-codex.md`; when Codex fails, DeepSeek (Fabro's own provider, another vendor) reviews in its place and says so; when both fail, a gate (retry, or continue without it, recorded in `.fidfab/reviews/`) |
 | `claude-review.fabro` | Same review by Claude (fable), then opus verifies and addresses |
 | `security-review.fabro` | opus security review of the changes, then verify and address |
 | `personal-data-audit.fabro` | Codex decides whether the changes touch potentially personal data; if so runs the [Cloudflare security-audit skill](https://github.com/cloudflare/security-audit-skill) and opus addresses the findings |
@@ -308,8 +310,15 @@ reads the same auth store as the Codex CLI ([codex-acp](https://github.com/agent
 After `fabro fork`, whose sandbox is new, `fidfab-codex-acp` writes it again when it is missing.
 A ChatGPT login renews its tokens, and a renewal voids every other copy: give Fabro a login of
 its own (`CODEX_HOME=~/.codex-fabro` above), not a copy of the one Codex uses on the host. When
-the sandbox's Codex says "Your access token could not be refreshed", store a fresh one, then
-start a new run or fork the stopped one: a run keeps the secrets it started with. Fabro
+the sandbox's Codex says "Your access token could not be refreshed", the copy in `~/.codex-fabro` is void too, and
+`scripts/setup.sh codex` would store it again: log out of it first, so that setup logs in afresh,
+
+```bash
+CODEX_HOME=~/.codex-fabro codex logout
+CODEX_HOME=~/.codex-fabro scripts/setup.sh --replace codex   # a fresh device login, stored over the void secret
+```
+
+then start a new run or fork the stopped one: a run keeps the secrets it started with. Fabro
 authenticates an ACP agent that advertises a sign-in method, by API key only; signed in through
 `auth.json`, `fidfab-codex-acp` advertises none, as Claude's adapter does.
 Subscription tokens rotate, so re-run this step if Codex stages stop authenticating.
@@ -599,7 +608,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 | `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again; the `author` step writes `git config` identity to `[run.git.author]` once (stubbed `fabro`/`gh`/`claude`/`codex`) |
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
-| `tests/test-review-wrappers.sh` | host, CI | after `fabro fork`, whose fresh sandbox missed bootstrap, `fidfab-codex-acp` writes `auth.json` (mode 600) from `CODEX_AUTH_JSON_B64` unless Codex has one and, signed in, answers `initialize` with no sign-in method, and `fidfab-coderabbit available` logs in again from `CODERABBIT_API_KEY` without touching it; `not_authenticated` without a key is unavailable; `fidfab-coderabbit review` saves the review and fails unless it completed (stubbed `codex-acp`/`coderabbit`) |
+| `tests/test-review-wrappers.sh` | host, CI | after `fabro fork`, whose fresh sandbox missed bootstrap, `fidfab-codex-acp` writes `auth.json` (mode 600) from `CODEX_AUTH_JSON_B64` unless Codex has one and, signed in, answers `initialize` with no sign-in method, and `fidfab-coderabbit available` logs in again from `CODERABBIT_API_KEY` without touching it; `not_authenticated` without a key is unavailable; `fidfab-coderabbit review` saves the review and fails unless it completed; `fidfab-walls` finds a wall down when CodeRabbit is logged out or neither Codex nor DeepSeek answers (stubbed `codex-acp`/`coderabbit`) |
 | `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert, routes gated runs to the screen, counts failed and pending legacy commit statuses, and records its label as `pr_status` and the head it checked in `pr-head`; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry (stubbed `gh`) |
 | `tests/test-logical-commits.sh` | host, CI | every workflow hands over from the PR steward to the history rewrite and to nothing else, and the rewrite leads on (not nowhere, not back to the steward), with node statements wrapped over lines read and any reference or edge the scanner cannot read failing; the rewrite runs only on `context.pr_status=done`; the stage is Claude opus at medium effort with `fidelity="truncate"`, and its prompt keeps the pull-request lookup without forks, the fetch-failure stop, the identical-tree-id checks (against GitHub and against the state before), the clean-work-tree checks with untracked files listed, the rule that GitHub moved only by checkpoints since the recorded commit or holds a recorded attempt (a push, rewording or rewind by someone else stops it), the leased force-push and the `Fabro-Run:` trailer; the agent sits between the `fidfab-history-tree record` and `verify` nodes (a failed record skips it), a failed verify stops at a human gate, and the helper records only when GitHub moved forward from the steward's cleared head along the checkout (a rewind or foreign push before the record fails), passes a code-preserving rewrite and fails changed code in HEAD or on the remote, another branch, and a pushed branch that disappeared |
 | `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present |

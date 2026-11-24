@@ -12,7 +12,7 @@ digraph CodeRabbitReview {
   check   [label="CodeRabbit available?",       script="fidfab-coderabbit available", retry_policy="none"]
   wait    [label="Wait 3 minutes",              shape=insulator, duration="3m"]
   recheck [label="CodeRabbit available? (retry)", script="fidfab-coderabbit available", retry_policy="none"]
-  run     [label="CodeRabbit review",           script="fidfab-coderabbit review", retry_policy="none"]
+  run     [label="CodeRabbit review",           class="coderabbit review", script="fidfab-coderabbit review", retry_policy="none"]
   blocked [shape=hexagon,
            label="CodeRabbit could not review: a usage limit, a login or the service (see the stages above). Retry once it is lifted, or continue with Claude's built-in review, which the review records will say. Another account takes fabro secret set and a fork from before this review. Typed text retries."]
 

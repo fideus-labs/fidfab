@@ -2,7 +2,8 @@
 //
 // Claude Code (fable) researches and drafts a roadmap of work items — each with
 // research notes, an implementation plan and acceptance criteria — and
-// iterates with the human. Codex critiques it, Claude addresses the critique,
+// iterates with the human. Codex critiques it (DeepSeek in its place when Codex fails; both failing stop at a
+// gate), Claude addresses the critique,
 // the human gives final approval, and the markdown documents are committed and
 // opened as a PR. Each work item is then implemented incrementally with
 // `fidfab medium`.
@@ -15,6 +16,7 @@ digraph FidfabLarge {
   exit  [shape=Msquare,  label="Exit"]
 
   bootstrap [import="components/bootstrap.fabro"]
+  preflight [import="components/preflight.fabro"]
 
   draft    [label="Research & draft roadmap (Claude fable)", class="claude fable plan",
             backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
@@ -27,6 +29,13 @@ digraph FidfabLarge {
   critique [label="Critique roadmap (Codex terra)", class="codex terra review",
             backend="acp", acp.command="fidfab-codex-acp --model terra --effort high",
             prompt="@components/prompts/roadmap-codex-critique.md"]
+  critique_fallback [label="Critique roadmap (DeepSeek), Codex unavailable", class="deepseek review",
+            model="deepseek-v4-pro", provider="deepseek", reasoning_effort="high",
+            prompt="@components/prompts/roadmap-deepseek-critique.md"]
+  critique_blocked [shape=hexagon,
+            label="Neither Codex nor DeepSeek could critique the roadmap: a usage limit, a login or another error (see the critique stages in the run's log). Retry once it is lifted, or continue without the critique, which .fidfab/reviews/roadmap-critique.md will say. Typed text retries."]
+  critique_skipped [label="Record the skipped critique",
+            script="mkdir -p .fidfab/reviews && echo 'Roadmap critique skipped: neither Codex nor DeepSeek could critique the roadmap (a usage limit, a login or another error) and a person chose to continue without it.' > .fidfab/reviews/roadmap-critique.md"]
   address  [label="Address critique (Claude fable)", class="claude fable plan",
             backend="acp", acp.command="fidfab-claude-acp --model fable --effort xhigh",
             prompt="@components/prompts/roadmap-address-critique.md"]
@@ -41,11 +50,19 @@ digraph FidfabLarge {
   steward  [import="components/pr-steward.fabro"]
   history  [import="components/logical-commits.fabro"]
 
-  start -> bootstrap -> draft -> gate
+  start -> bootstrap -> preflight -> draft -> gate
   gate   -> critique [label="[A] Approve draft"]
   gate   -> revise   [freeform=true]
   revise -> gate
-  critique -> address -> final
+  critique -> critique_fallback [condition="outcome=failed"]
+  critique -> address
+  critique_fallback -> critique_blocked [condition="outcome=failed"]
+  critique_fallback -> address
+  critique_blocked -> critique         [label="[R] Retry the critique"]
+  critique_blocked -> critique_skipped [label="[C] Continue without the critique"]
+  critique_blocked -> critique         [freeform=true]  // typed text never skips the critique
+  critique_skipped -> final
+  address -> final
   final  -> commit   [label="[A] Approve roadmap"]
   final  -> revise   [freeform=true]
   commit -> pr -> steward -> history -> exit

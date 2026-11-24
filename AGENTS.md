@@ -22,7 +22,8 @@ a Docker sandbox image and tests. Keep the following in mind.
 - `scripts/sync-components.sh --check` must pass.
 - `tests/test-effort-levels.sh` must pass after any change to an agent node. Every Claude Code,
   Codex and Gemini node sets its effort explicitly: Claude implementation and planning `xhigh`,
-  Claude and Codex review and security `high`, everything else `medium`. The test derives the
+  Claude and Codex review and security `high`, and DeepSeek's review where it stands in for
+  Codex; everything else `medium`. The test derives the
   level from the agent and the role word in the node's `class` (`implement`, `review`,
   `security`, `verify`, `plan`, `git`, `decision`), so every agent node carries exactly one; a
   node whose class does not decide its level goes in the test's `override` table, as the verify
@@ -41,7 +42,7 @@ a Docker sandbox image and tests. Keep the following in mind.
 - `tests/test-pr-steward.sh` must pass after any change to `fidfab-pr-status`,
   `fidfab-pr-reply` or `quote.jq`.
 - `tests/test-review-wrappers.sh` must pass after any change to `fidfab-codex-acp`,
-  `fidfab-coderabbit` or the credential step of `fidfab-bootstrap`.
+  `fidfab-coderabbit`, `fidfab-walls` or the credential step of `fidfab-bootstrap`.
 - Every workflow graph sets `on_failure="exit"` (`validate-workflows.sh` checks it).
 - `shellcheck -S warning` on all shell scripts; `node --check tests/acp-smoke.mjs`.
 - If `docker` is available, `docker/build.sh && tests/test-image.sh` is the full check.
