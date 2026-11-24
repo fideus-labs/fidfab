@@ -280,6 +280,10 @@ reaches an image layer. GitHub's host keys, for `github.com` and the port-443 en
 `origin` is rewritten to HTTPS on `github.com`, because sandboxes authenticate to GitHub with
 Fabro's `GITHUB_TOKEN` rather than an SSH key.
 
+If your git config rewrites the URL you give (`url.<base>.insteadOf`, commonly `git@github.com:`
+to `https://github.com/`), `build.sh` clones the rewritten URL when it is plain HTTPS and reads without
+credentials, as a public repository does, and keeps the SSH URL and your ssh-agent otherwise.
+
 ### 5. Agent credentials (Fabro vault)
 
 Secrets live in the Fabro server vault and are injected into the sandbox as environment
@@ -607,7 +611,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 | `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow, each of which ends the run on a failed stage (`on_failure="exit"`) |
 | `scripts/sync-components.sh --check` | host, CI | vendored components match `components/` |
 | `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again; the `author` step writes `git config` identity to `[run.git.author]` once; the `github-app` step registers an App only when Fabro has none, adds the dev-token login back next to GitHub sign-in once, and prints its permission and installation pages (stubbed `fabro`/`gh`/`claude`/`codex`) |
-| `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
+| `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, the Dockerfile quotes the specs that receive it, and a host git URL rewrite reaches the build only when it reads without credentials (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-review-wrappers.sh` | host, CI | after `fabro fork`, whose fresh sandbox missed bootstrap, `fidfab-codex-acp` writes `auth.json` (mode 600) from `CODEX_AUTH_JSON_B64` unless Codex has one and, signed in, answers `initialize` with no sign-in method, and `fidfab-coderabbit available` logs in again from `CODERABBIT_API_KEY` without touching it; `not_authenticated` without a key is unavailable; `fidfab-coderabbit review` saves the review and fails unless it completed (stubbed `codex-acp`/`coderabbit`) |
 | `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert, routes gated runs to the screen, counts failed and pending legacy commit statuses, and records its label as `pr_status` and the head it checked in `pr-head`; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry, and its preview flags a push that fails a dry run (stubbed `gh`) |
