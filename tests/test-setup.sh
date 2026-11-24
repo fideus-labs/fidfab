@@ -159,4 +159,45 @@ FABRO_STUB_SECRETS=CODERABBIT_API_KEY scripts/setup.sh --replace coderabbit </de
 check "--replace: coderabbit secret set -> asked again" \
   "secret set --no-upgrade-check --description CodeRabbit agentic API key for coderabbit review --agent CODERABBIT_API_KEY"
 
+# github-app registers an App for the organization typed in (or the user's own account) unless
+# Fabro already uses one, and then gives the App's own addresses for the two missing permissions.
+mkdir -p "$tmp/apphome/.fabro"
+# Only [server.integrations.github] counts, not a key of the same name in another table.
+printf '[server.integrations.slack]\nstrategy = "app"\n[server.integrations.github]\nstrategy = "token"\n' \
+  > "$tmp/apphome/.fabro/settings.toml"
+echo acme | HOME="$tmp/apphome" scripts/setup.sh github-app >/dev/null
+check "github-app registers an organization's App" \
+  "install github --no-upgrade-check --non-interactive --strategy app --owner org:acme"
+echo | HOME="$tmp/apphome" scripts/setup.sh github-app >/dev/null
+check "... or one for the user's own account" \
+  "install github --no-upgrade-check --non-interactive --strategy app --owner personal"
+if ! echo 'acme; rm -rf /' | HOME="$tmp/apphome" scripts/setup.sh github-app >/dev/null 2>&1; then
+  echo "ok   github-app refuses an invalid organization name"; else echo "FAIL github-app accepted an invalid name"; fail=1; fi
+check "... without registering" ""
+printf '[server.integrations.github]\nstrategy = \047app\047  # set by hand\nslug = "fabro-acme"\n' \
+  > "$tmp/apphome/.fabro/settings.toml"
+out="$(HOME="$tmp/apphome" scripts/setup.sh github-app </dev/null)"
+check "github-app keeps an App already set up" ""
+if [[ "$out" == *"https://github.com/settings/apps/fabro-acme/permissions"* &&
+      "$out" == *"https://github.com/apps/fabro-acme/installations/new"* ]]; then
+  echo "ok   github-app names the App's permission and installation pages"
+else echo "FAIL github-app pages: $out"; fail=1; fi
+out="$(GH_STUB_LOGIN=acme HOME="$tmp/apphome" scripts/setup.sh github-app </dev/null)"
+if [[ "$out" == *"https://github.com/organizations/acme/settings/apps/fabro-acme/permissions"* ]]; then
+  echo "ok   github-app gives an organization's App its organization's settings page"
+else echo "FAIL github-app organization page: $out"; fail=1; fi
+: > "$FIDFAB_TEST_LOG"
+# Fabro's App install leaves only GitHub sign-in, which locks out the CLI's dev token: the step
+# adds it back once (restarting the server), whatever a comment says, and leaves
+# [server.auth.github] alone.
+printf '[server.auth]\nmethods = ["github"]  # dev-token off\n\n[server.auth.github]\nallowed_usernames = ["octocat"]\n' \
+  >> "$tmp/apphome/.fabro/settings.toml"
+HOME="$tmp/apphome" scripts/setup.sh github-app </dev/null >/dev/null
+HOME="$tmp/apphome" scripts/setup.sh github-app </dev/null >/dev/null
+check "github-app restarts the server only when it adds the dev-token login" "server restart --no-upgrade-check"
+got="$(grep -E '^(methods|allowed_usernames) =' "$tmp/apphome/.fabro/settings.toml")"
+if [[ "$got" == $'methods = ["dev-token", "github"]  # dev-token off\nallowed_usernames = ["octocat"]' ]]; then
+  echo "ok   github-app keeps the dev-token login next to GitHub sign-in"
+else echo "FAIL github-app auth methods: $got"; fail=1; fi
+
 exit "$fail"

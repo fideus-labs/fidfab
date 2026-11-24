@@ -2,7 +2,8 @@
 # test-pr-steward.sh — host-side check of the PR steward helpers against a stubbed `gh`.
 # fidfab-pr-status lists unresolved threads with their authors, renders comment text inert and
 # routes gated runs to the human screen. fidfab-pr-reply posts only replies to screened
-# threads, pushes first, and does not repeat posted replies when a retry follows a failure.
+# threads, pushes first, and does not repeat posted replies when a retry follows a failure;
+# its preview flags a push that fails a dry run, without running the pre-push hook.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 bin="$PWD/docker/rootfs/usr/local/bin"
@@ -18,7 +19,10 @@ cat > "$tmp/stub/gh" <<'STUB'
 #!/usr/bin/env bash
 t=""; for a in "$@"; do [[ "$a" == t=* ]] && t="${a#t=}"; [[ "$a" == b=* ]] && b="${a#b=}"; done
 case "$*" in
-  "pr view"*)   [[ -z "${GH_NO_PR:-}" ]] || exit 1; cat "${PR:-$FIX/pr.json}" ;;
+  "pr view"*)
+    [[ -z "${GH_NO_PR:-}" ]] || { echo 'no pull requests found for branch "feature"' >&2; exit 1; }
+    [[ -z "${GH_FAIL_PR:-}" ]] || { echo 'GraphQL: Resource not accessible by personal access token' >&2; exit 1; }
+    cat "${PR:-$FIX/pr.json}" ;;
   "repo view"*) echo o/r ;;
   *resolveReviewThread*) echo "resolve $t" >> "$FIX/calls" ;;
   *addPullRequestReviewThreadReply*)
@@ -123,6 +127,8 @@ check "... and leaves no partial listing"           test ! -e .fidfab/reviews/pr
 check "no pull request: no-pr"                      test "$(GH_NO_PR=1 fidfab-pr-status | label)" = no-pr
 check "... recorded as pr_status"                   test "$(GH_NO_PR=1 fidfab-pr-status | tail -n1 | jq -r .context_updates.pr_status)" = no-pr
 check "... and no head is left from an earlier check" test ! -e .fidfab/reviews/pr-head
+check "a failed pull request query fails the stage" not quiet env GH_FAIL_PR=1 fidfab-pr-status
+check "... with gh's error, not as no-pr"           grep -qF 'Resource not accessible' <(GH_FAIL_PR=1 fidfab-pr-status 2>&1)
 check "a failed thread query fails the stage"       not quiet env GH_FAIL_THREADS=1 fidfab-pr-status
 check "... and leaves no listing behind"            test ! -e .fidfab/reviews/pr-status.md
 
@@ -153,6 +159,18 @@ check "preview names thread, author and resolve"    grep -qF 'thread PRRT_1  src
 check "preview quotes the reply text"               grep -qxF $'    | Handled �[31m in abc' "$p"
 check "preview shows the unpushed diff"             grep -qxF '    | +change' "$p"
 check "preview of valid replies has no warning"     not grep -q 'NOT POSTABLE' "$p"
+hook="$(git rev-parse --git-path hooks/pre-push)"
+printf '#!/bin/sh\ntouch "%s/hook-ran"; exit 1\n' "$tmp" > "$hook"; chmod +x "$hook"
+fidfab-pr-reply --preview > "$p"
+check "the preview does not run the pre-push hook"  test ! -e "$tmp/hook-ran"
+rm "$hook"
+base="$(git -C "$tmp/origin.git" rev-parse feature)"
+git -C "$tmp/origin.git" update-ref refs/heads/feature \
+  "$(git -C "$tmp/origin.git" commit-tree -p "$base" -m "pushed elsewhere" "$base^{tree}")"
+fidfab-pr-reply --preview > "$p"
+check "a push that would be rejected is flagged"    grep -q 'NOT POSTABLE' "$p"
+check "... with git's reason"                       grep -qF 'git push fails:' "$p"
+git -C "$tmp/origin.git" update-ref refs/heads/feature "$base"
 check "a failed reply fails the stage"              not quiet env GH_FAIL_REPLY=2 fidfab-pr-reply
 check "... after pushing the commits"               test "$(git -C "$tmp/origin.git" rev-parse feature)" = "$(git rev-parse HEAD)"
 check "... leaving only the unposted reply"         test "$(jq -c 'map(.thread)' "$r")" = '["PRRT_2"]'

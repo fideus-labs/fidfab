@@ -188,7 +188,7 @@ RUN npx -y skills add ${PLANNING_WITH_FILES_REF} --skill planning-with-files -g 
 # fidfab helper scripts
 # ---------------------------------------------------------------------------
 COPY docker/rootfs/ /
-RUN chmod +x /usr/local/bin/fidfab-*
+RUN chmod +x /usr/local/bin/fidfab-* /usr/local/bin/gh
 
 # ---------------------------------------------------------------------------
 # Built-in clone of the target repository with warmed caches
@@ -224,6 +224,13 @@ RUN if [ -n "${TARGET_REPO_URL}" ]; then fidfab-warm-cache ${FIDFAB_REPO}; fi
 
 # Record what was built for `fidfab-doctor` and the tests.
 RUN fidfab-doctor --write-manifest ${FIDFAB_HOME}/manifest.json || true
+
+# Fabro gives every stage its own github.com credential helper through GIT_CONFIG_COUNT, which
+# replaces the gh helper fidfab-bootstrap sets up, and that store can be empty: git push then
+# fails with "could not read Username". Git reads GIT_CONFIG_PARAMETERS (what `git -c` sets)
+# after GIT_CONFIG_COUNT, so this appends gh, which answers from the stage's GITHUB_TOKEN, as a
+# fallback for github.com only. Last in the file so that changing it rebuilds no cached layer.
+ENV GIT_CONFIG_PARAMETERS="'credential.https://github.com.helper=!gh auth git-credential'"
 
 WORKDIR /workspace
 ENTRYPOINT ["/usr/bin/tini", "--"]

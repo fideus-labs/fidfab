@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# gh — run /usr/bin/gh with the current token from Fabro's renewed git credential store.
+#
+# Under Fabro's GitHub App strategy a stage's GITHUB_TOKEN is an installation token fixed when
+# the stage started, with as little as ten minutes left; Fabro renews only the store that git
+# reads, every minute. Taking the token from that store, as git push does, keeps gh working
+# through a long agent stage. Without a Fabro store, an origin, or an entry for it, gh runs as is.
+# shortcut: assumes the run declares a contents permission, as fidfab's workflows do; without
+# one Fabro's store holds a read-only token, and gh would get that instead of GITHUB_TOKEN.
+if [[ -n "${GITHUB_TOKEN:-}" && -z "${GH_TOKEN:-}" ]]; then
+  for v in ${!GIT_CONFIG_VALUE_*}; do
+    [[ "${!v}" == "store --file="*fabro-git-credentials* ]] || continue
+    if url="$(git remote get-url origin 2>/dev/null)"; then
+      # Ask Fabro's store alone: git credential fill also asks any other helper set for the
+      # origin's host (Fabro clears them for github.com only), and gh would send its password
+      # to GitHub.
+      fresh="$(printf 'url=%s\n\n' "$url" \
+        | git credential-store --file="${!v#store --file=}" get 2>/dev/null | sed -n 's/^password=//p')"
+      [[ -n "$fresh" ]] && export GITHUB_TOKEN="$fresh"
+    fi
+    break
+  done
+fi
+exec /usr/bin/gh "$@"

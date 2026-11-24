@@ -29,8 +29,15 @@ mkdir -p "$out"
 rm -f "$out/pr-status.md" "$out/pr-threads.json" "$out/pr-head"
 
 branch="$(git rev-parse --abbrev-ref HEAD)"
-pr_json="$(gh pr view "$branch" --json number,url,mergeable,statusCheckRollup,headRefOid 2>/dev/null || true)"
-if [[ -z "$pr_json" ]]; then
+err="$(mktemp)"; trap 'rm -f "$err"' EXIT
+if ! pr_json="$(gh pr view "$branch" --json number,url,mergeable,statusCheckRollup,headRefOid 2>"$err")"; then
+  # Only gh's own "not found" means there is no PR. Any other error (an expired token, one that
+  # cannot read checks) fails the stage rather than ending the steward as if the PR were gone.
+  if ! grep -qF 'no pull requests found for branch' "$err"; then
+    echo "fidfab-pr-status: cannot read the pull request for $branch:" >&2
+    cat "$err" >&2
+    exit 1
+  fi
   echo "No open pull request for branch $branch"
   echo '{"preferred_next_label":"no-pr","context_updates":{"pr_status":"no-pr","pr_open":false}}'
   exit 0

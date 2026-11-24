@@ -43,7 +43,7 @@ jobs:
       - name: shellcheck
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q shellcheck >/dev/null
-          shellcheck -S warning scripts/*.sh tests/*.sh docker/build.sh docker/rootfs/usr/local/bin/fidfab-*
+          shellcheck -S warning scripts/*.sh tests/*.sh docker/build.sh docker/rootfs/usr/local/bin/fidfab-* docker/rootfs/usr/local/bin/gh
       - uses: actions/setup-node@v4
         with:
           node-version: 22

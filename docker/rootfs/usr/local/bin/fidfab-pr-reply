@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # fidfab-pr-reply — show or post the PR steward's proposed review-thread replies.
 #
-# Usage: fidfab-pr-reply --preview   print the replies, unpushed commits and diff for the human
+# Usage: fidfab-pr-reply --preview   print the replies, unpushed commits and diff for the human,
+#                                    and why approving would fail (including a failing dry-run push)
 #        fidfab-pr-reply             push, then resolve threads and post the replies
 #
 # The steward writes its replies to .fidfab/reviews/steward-replies.json:
@@ -39,6 +40,13 @@ quote() { jq -Rrs -L "$lib" --argjson max "$1" 'include "quote"; quote($max)'; }
 
 if [[ "${1:-}" == --preview ]]; then
   p="$(problems)"
+  # Approving pushes first, so a push that already fails a dry run (no credentials, the branch
+  # moved on GitHub) must show here, not only as a failed publish the human never sees.
+  # GitHub's receive hooks (branch protection) run only on the real push. --no-verify: a dry run
+  # still runs the local pre-push hook, which may upload (Git LFS) before the human approves.
+  if git rev-parse -q --verify '@{u}' >/dev/null && ! out="$(git push --dry-run --no-verify 2>&1)"; then
+    p+="${p:+$'\n'}git push fails: $out"
+  fi
   if [[ -n "$p" ]]; then
     printf 'NOT POSTABLE: approving now fails without posting anything. Type what to fix:\n%s\n\n' "$p" | quote 4000
     echo
