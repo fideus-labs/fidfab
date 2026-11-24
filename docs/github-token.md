@@ -46,8 +46,8 @@ only, valid for an hour. It renews the sandbox's git credentials every minute an
 new process a fresh `GITHUB_TOKEN`. None of your own tokens reaches a sandbox, and there is no
 token for you to rotate.
 
-`scripts/setup.sh github-app` runs step 1 and prints the addresses for steps 2 and 3; rerun it
-to see them again.
+`scripts/setup.sh github-app` runs step 1, keeps the CLI's dev-token login (below) and prints
+the addresses for steps 2 and 3; rerun it to see them again.
 
 1. **Register the App** on the host that runs the Fabro server. `OWNER` is the organization that
    owns the target repositories:
@@ -65,8 +65,24 @@ to see them again.
      that local URL.
    - Fabro then writes the App's ID, client ID and slug to `~/.fabro/settings.toml`, puts its
      private key, client secret and webhook secret in the vault, drops the token strategy's
-     `GITHUB_TOKEN` secret and restarts the server. The listen address and the rest of
-     `settings.toml` are kept.
+     `GITHUB_TOKEN` secret and restarts the server. The listen address is kept.
+   - It also replaces the server's login methods with GitHub sign-in for your `gh` login
+     alone:
+
+     ```toml
+     [server.auth]
+     methods = ["github"]
+
+     [server.auth.github]
+     allowed_usernames = ["LOGIN"]
+     ```
+
+     The CLI is still logged in with the server's dev token, which the server now refuses:
+     `fabro doctor` fails with `Diagnostics (probe failed)` and, with `-v`,
+     `Authentication required.`, and so do `fabro run` and every other command that talks to
+     the server. `scripts/setup.sh github-app` adds the dev token back next to GitHub sign-in
+     and restarts the server. By hand, set `methods = ["dev-token", "github"]` and run
+     `fabro server restart`. The web UI keeps GitHub sign-in either way.
 
    `SLUG` below is the App's slug: `slug` under `[server.integrations.github]` in
    `~/.fabro/settings.toml`.

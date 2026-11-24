@@ -186,5 +186,18 @@ out="$(GH_STUB_LOGIN=acme HOME="$tmp/apphome" scripts/setup.sh github-app </dev/
 if [[ "$out" == *"https://github.com/organizations/acme/settings/apps/fabro-acme/permissions"* ]]; then
   echo "ok   github-app gives an organization's App its organization's settings page"
 else echo "FAIL github-app organization page: $out"; fail=1; fi
+: > "$FIDFAB_TEST_LOG"
+# Fabro's App install leaves only GitHub sign-in, which locks out the CLI's dev token: the step
+# adds it back once (restarting the server), whatever a comment says, and leaves
+# [server.auth.github] alone.
+printf '[server.auth]\nmethods = ["github"]  # dev-token off\n\n[server.auth.github]\nallowed_usernames = ["octocat"]\n' \
+  >> "$tmp/apphome/.fabro/settings.toml"
+HOME="$tmp/apphome" scripts/setup.sh github-app </dev/null >/dev/null
+HOME="$tmp/apphome" scripts/setup.sh github-app </dev/null >/dev/null
+check "github-app restarts the server only when it adds the dev-token login" "server restart --no-upgrade-check"
+got="$(grep -E '^(methods|allowed_usernames) =' "$tmp/apphome/.fabro/settings.toml")"
+if [[ "$got" == $'methods = ["dev-token", "github"]  # dev-token off\nallowed_usernames = ["octocat"]' ]]; then
+  echo "ok   github-app keeps the dev-token login next to GitHub sign-in"
+else echo "FAIL github-app auth methods: $got"; fail=1; fi
 
 exit "$fail"

@@ -116,6 +116,20 @@ github_setting() {
       gsub(/["\047]/, ""); print; exit }' "$SETTINGS" 2>/dev/null || true
 }
 
+# ensure_dev_token_auth: add "dev-token" to [server.auth] methods in $SETTINGS when missing; true
+# when it changed the file. Fabro's App install sets methods = ["github"], which refuses the
+# CLI's dev-token login (fabro doctor: "Authentication required.").
+# shortcut: line-based, so a multi-line methods array with dev-token on a later line gets it
+# twice; Fabro writes the array on one line.
+ensure_dev_token_auth() {
+  local out
+  out="$(awk '/^[[:space:]]*\[/ { s = ($0 ~ /^[[:space:]]*\[server\.auth\][[:space:]]*(#.*)?$/) }
+    s && /^[[:space:]]*methods[[:space:]]*=/ { v = $0; sub(/#.*/, "", v)
+      if (v !~ /dev-token/) { sub(/\[/, "[\"dev-token\", "); c = 1 } }
+    { print } END { exit !c }' "$SETTINGS")" || return 1
+  printf '%s\n' "$out" > "$SETTINGS" # in place, keeping the file's mode
+}
+
 step_github_app() {
   bold "GitHub App: each run gets a token for its own repository (docs/github-token.md)"
   [[ -f "$SETTINGS" ]] || { note "No $SETTINGS yet: run scripts/setup.sh fabro first."; return 1; }
@@ -130,6 +144,13 @@ step_github_app() {
     note "Needs gh logged in here, and an organization owner for an organization's App. Open the"
     note "URL it prints in a browser on this machine (or forward its port over SSH)."
     fabro install github --no-upgrade-check --non-interactive --strategy app --owner "$owner"
+  fi
+  if ensure_dev_token_auth; then
+    note "Added \"dev-token\" to [server.auth] methods in $SETTINGS: the CLI logs in with it,"
+    note "the web UI keeps GitHub sign-in."
+    # A rerun finds the file fixed and does not restart, so say when this one failed.
+    fabro server restart --no-upgrade-check >/dev/null 2>&1 \
+      || note "WARNING: fabro server restart failed; run it yourself so the server reads the change."
   fi
   slug="$(github_setting slug)"
   [[ -n "$slug" ]] || { note "No App slug in $SETTINGS; finish with docs/github-token.md."; return 0; }
