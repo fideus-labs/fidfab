@@ -15,6 +15,8 @@
 #   coderabbit   CodeRabbit CLI agentic API key
 #   environment  register the "fidfab" Docker environment with the local server
 #   doctor       fabro doctor
+#   github-app   switch Fabro to a GitHub App, so each run gets a token for its own repository
+#                (not among the default steps; docs/github-token.md)
 #
 # Nothing here writes credentials to disk outside Fabro's vault (and the
 # CLIs' own login stores on this machine).
@@ -104,6 +106,50 @@ EOF
     || note "WARNING: [run.git.author] in $SETTINGS differs from git config; edit it, then fabro server restart."
   # Restart only for a new block: a no-op re-run should not restart the server under active runs.
   [[ -n "$had" ]] || fabro server restart --no-upgrade-check >/dev/null 2>&1 || true
+}
+
+# github_setting <key>: its value under [server.integrations.github] in $SETTINGS, unquoted;
+# empty when unset.
+github_setting() {
+  awk -v k="$1" '/^[[:space:]]*\[/ { s = ($0 ~ /^[[:space:]]*\[server\.integrations\.github\][[:space:]]*(#.*)?$/) }
+    s && $0 ~ "^[[:space:]]*" k "[[:space:]]*=" { sub(/^[^=]*=[[:space:]]*/, ""); sub(/[[:space:]]*(#.*)?$/, "")
+      gsub(/["\047]/, ""); print; exit }' "$SETTINGS" 2>/dev/null || true
+}
+
+step_github_app() {
+  bold "GitHub App: each run gets a token for its own repository (docs/github-token.md)"
+  [[ -f "$SETTINGS" ]] || { note "No $SETTINGS yet: run scripts/setup.sh fabro first."; return 1; }
+  local org="" owner slug login
+  if [[ "$(github_setting strategy)" == app ]]; then
+    note "Fabro already uses a GitHub App; not registering another."
+  else
+    read -rp "  Organization that owns the target repositories (empty: your own account): " org || true
+    if [[ -z "$org" ]]; then owner=personal
+    elif [[ "$org" =~ ^[A-Za-z0-9-]+$ ]]; then owner="org:$org"
+    else note "Not an organization name: $org"; return 1; fi
+    note "Needs gh logged in here, and an organization owner for an organization's App. Open the"
+    note "URL it prints in a browser on this machine (or forward its port over SSH)."
+    fabro install github --no-upgrade-check --non-interactive --strategy app --owner "$owner"
+  fi
+  slug="$(github_setting slug)"
+  [[ -n "$slug" ]] || { note "No App slug in $SETTINGS; finish with docs/github-token.md."; return 0; }
+  # An organization's App has its settings under the organization.
+  login="${org:-$(gh api "apps/$slug" --jq '.owner | select(.type == "Organization") | .login' 2>/dev/null || true)}"
+  note "Fabro registers its App without two permissions every fidfab workflow requests; until it"
+  note "has them, every run fails at its first stage."
+  if [[ -n "$login" ]]; then
+    note "1. https://github.com/organizations/$login/settings/apps/$slug/permissions"
+  else
+    note "1. https://github.com/settings/apps/$slug/permissions"
+    note "   (an organization's App: https://github.com/organizations/ORG/settings/apps/$slug/permissions)"
+  fi
+  note "   Repository permissions: Actions and Commit statuses Read-only, Workflows No access; Save changes."
+  note "2. https://github.com/apps/$slug/installations/new"
+  note "   Only select repositories: the ones you run fidfab on; Install. If it was installed before"
+  note "   step 1, accept the permission request under the installation's Configure."
+  note "3. scripts/setup.sh doctor, then a verify run on a branch with an open pull request."
+  grep -qF "[run.git.author]" "$SETTINGS" \
+    || note "Commits are authored by the App's bot until scripts/setup.sh author sets [run.git.author]."
 }
 
 # litellm_model_has <model> <capabilities.reasoning_effort|protocol_options.reasoning_effort_levels = true>
@@ -307,8 +353,9 @@ steps=("$@")
 for s in "${steps[@]}"; do
   case "$s" in
     fabro|author|litellm|brave|claude|codex|coderabbit|environment|doctor) "step_$s" ;;
+    github-app) step_github_app ;;
     --replace) REPLACE=1; continue ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) echo "unknown step: $s" >&2; exit 64 ;;
   esac
   echo

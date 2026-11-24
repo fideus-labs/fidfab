@@ -188,7 +188,7 @@ RUN npx -y skills add ${PLANNING_WITH_FILES_REF} --skill planning-with-files -g 
 # fidfab helper scripts
 # ---------------------------------------------------------------------------
 COPY docker/rootfs/ /
-RUN chmod +x /usr/local/bin/fidfab-*
+RUN chmod +x /usr/local/bin/fidfab-* /usr/local/bin/gh
 
 # ---------------------------------------------------------------------------
 # Built-in clone of the target repository with warmed caches

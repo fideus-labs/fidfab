@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# gh — run /usr/bin/gh with the current token from Fabro's renewed git credential store.
+#
+# Under Fabro's GitHub App strategy a stage's GITHUB_TOKEN is an installation token fixed when
+# the stage started, with as little as ten minutes left; Fabro renews only the store that git
+# reads, every minute. Taking the token from that store, as git push does, keeps gh working
+# through a long agent stage. Without a Fabro store, an origin, or an entry for it, gh runs as is.
+# shortcut: assumes the run declares a contents permission, as fidfab's workflows do; without
+# one Fabro's store holds a read-only token, and gh would get that instead of GITHUB_TOKEN.
+if [[ -n "${GITHUB_TOKEN:-}" && -z "${GH_TOKEN:-}" && -z "${FIDFAB_GH_FRESH:-}" ]]; then
+  for v in ${!GIT_CONFIG_VALUE_*}; do
+    [[ "${!v}" == "store --file="*fabro-git-credentials* ]] || continue
+    if url="$(git remote get-url origin 2>/dev/null)"; then
+      # Without GIT_CONFIG_PARAMETERS (the Dockerfile's gh helper) only Fabro's store answers,
+      # so this cannot call back into gh; FIDFAB_GH_FRESH guards against that all the same.
+      fresh="$(printf 'url=%s\n\n' "$url" \
+        | env -u GIT_CONFIG_PARAMETERS FIDFAB_GH_FRESH=1 GIT_TERMINAL_PROMPT=0 git credential fill 2>/dev/null \
+        | sed -n 's/^password=//p')"
+      [[ -n "$fresh" ]] && export GITHUB_TOKEN="$fresh"
+    fi
+    break
+  done
+fi
+exec /usr/bin/gh "$@"

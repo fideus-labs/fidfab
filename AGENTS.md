@@ -31,6 +31,7 @@ a Docker sandbox image and tests. Keep the following in mind.
   prompt, `fidfab-history-tree` or a workflow graph (`validate-workflows.sh` runs it too). A workflow that imports
   `pr-steward.fabro` imports `logical-commits.fabro` as the steward's only successor.
 - `tests/test-bootstrap.sh` must pass after any change to `fidfab-bootstrap`.
+- `tests/test-setup.sh` must pass after any change to `scripts/setup.sh`.
 - `tests/test-build.sh` must pass after any change to `docker/build.sh`.
 - `tests/test-model-aliases.sh` must pass after any change to a `.fabro`, a `fidfab-*-acp`
   wrapper or `tests/check-model-aliases.sh` (`validate-workflows.sh` runs the check too).
@@ -85,9 +86,14 @@ a Docker sandbox image and tests. Keep the following in mind.
   sets up, then a `credential-store` file that can be empty). No config file can win against
   that, so the Dockerfile appends gh through `GIT_CONFIG_PARAMETERS`; `tests/test-tools.sh`
   checks it.
-- `[run.integrations.github] permissions` only limits the run's `GITHUB_TOKEN` under Fabro's
-  GitHub App strategy. The default token strategy injects the vault's `GITHUB_TOKEN` as is, so
-  its scope is whatever token the user stored (`docs/github-token.md`).
+- `[run.integrations.github.permissions]` only limits the run's `GITHUB_TOKEN` under Fabro's
+  GitHub App strategy, where it is exactly the token's permissions and the App must grant every
+  one (Fabro registers its App without `actions` and `statuses`; a run requesting more than the
+  installation has fails at its first stage). The default token strategy injects the vault's
+  `GITHUB_TOKEN` as is, so its scope is whatever token the user stored (`docs/github-token.md`).
+  A stage's `GITHUB_TOKEN` is fixed at spawn while Fabro renews only its git credential store, so
+  `docker/rootfs/usr/local/bin/gh` wraps `/usr/bin/gh` to read the token from that store;
+  `tests/test-tools.sh` checks it.
 - Fabro commits a checkpoint after every node (`fabro(<run id>): <node> (<status>)`, empty
   when the node changed nothing) and pushes `fabro/run/<id>` each time, without updating
   `origin/<branch>` in the sandbox: `git fetch` before comparing with the remote. No node

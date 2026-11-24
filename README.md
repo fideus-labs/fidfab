@@ -135,8 +135,9 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 
 - Linux or macOS workstation with Docker (daemon running, your user can access the socket), or Windows WSL with Docker Desktop
 - A GitHub account with push access to the target repository, logged in with the `gh` CLI
-  (`gh auth login`; `fabro install` takes its GitHub token from `gh auth token`, which
-  [docs/github-token.md](docs/github-token.md) replaces with one scoped to the target repositories)
+  (`gh auth login`; `fabro install` takes its GitHub token from `gh auth token`, which a GitHub
+  App replaces with one scoped to each run's repository:
+  [docs/github-token.md](docs/github-token.md))
 - Subscriptions or keys: Claude Pro/Max (for Claude Code), ChatGPT Plus/Pro or an OpenAI API key
   (for Codex), a [CodeRabbit](https://www.coderabbit.ai) account with an agentic API key, a
   [Brave Search API](https://brave.com/search/api/) key
@@ -183,11 +184,12 @@ on Gemini through LiteLLM (next step) and the Codex stages authenticate with `CO
 
 That GitHub token is your `gh` login, with `repo` scope on every repository you can reach, and
 every agent in every run can use it; the `permissions` table in `workflow.toml` does not limit
-it. Replace it with a token limited to the target repositories
-([docs/github-token.md](docs/github-token.md)).
+it. Switch Fabro to a GitHub App, which gives each run a one-hour token limited to its
+repository and the workflow's permissions: `scripts/setup.sh github-app`, then the steps it
+prints ([docs/github-token.md](docs/github-token.md)).
 
 `scripts/setup.sh author` then makes run commits carry your own identity instead of the GitHub
-token's login and noreply address: it appends
+token's login (or the App's bot) and noreply address: it appends
 [`[run.git.author]`](https://docs.fabro.sh/administration/server-configuration#run-git-author-section)
 with `git config user.name` and `user.email` to `~/.fabro/settings.toml` and restarts the server.
 Fabro injects them as `GIT_AUTHOR_*` and `GIT_COMMITTER_*` into every run. An existing block is
@@ -604,13 +606,13 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 |---|---|---|
 | `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow, each of which ends the run on a failed stage (`on_failure="exit"`) |
 | `scripts/sync-components.sh --check` | host, CI | vendored components match `components/` |
-| `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again; the `author` step writes `git config` identity to `[run.git.author]` once (stubbed `fabro`/`gh`/`claude`/`codex`) |
+| `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again; the `author` step writes `git config` identity to `[run.git.author]` once; the `github-app` step registers an App only when Fabro has none and prints its permission and installation pages (stubbed `fabro`/`gh`/`claude`/`codex`) |
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, and the Dockerfile quotes the specs that receive it (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-review-wrappers.sh` | host, CI | after `fabro fork`, whose fresh sandbox missed bootstrap, `fidfab-codex-acp` writes `auth.json` (mode 600) from `CODEX_AUTH_JSON_B64` unless Codex has one and, signed in, answers `initialize` with no sign-in method, and `fidfab-coderabbit available` logs in again from `CODERABBIT_API_KEY` without touching it; `not_authenticated` without a key is unavailable; `fidfab-coderabbit review` saves the review and fails unless it completed (stubbed `codex-acp`/`coderabbit`) |
 | `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert, routes gated runs to the screen, counts failed and pending legacy commit statuses, and records its label as `pr_status` and the head it checked in `pr-head`; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry, and its preview flags a push that fails a dry run (stubbed `gh`) |
 | `tests/test-logical-commits.sh` | host, CI | every workflow hands over from the PR steward to the history rewrite and to nothing else, and the rewrite leads on (not nowhere, not back to the steward), with node statements wrapped over lines read and any reference or edge the scanner cannot read failing; the rewrite runs only on `context.pr_status=done`; the stage is Claude opus at medium effort with `fidelity="truncate"`, and its prompt keeps the pull-request lookup without forks, the fetch-failure stop, the identical-tree-id checks (against GitHub and against the state before), the clean-work-tree checks with untracked files listed, the rule that GitHub moved only by checkpoints since the recorded commit or holds a recorded attempt (a push, rewording or rewind by someone else stops it), the leased force-push and the `Fabro-Run:` trailer; the agent sits between the `fidfab-history-tree record` and `verify` nodes (a failed record skips it), a failed verify stops at a human gate, and the helper records only when GitHub moved forward from the steward's cleared head along the checkout (a rewind or foreign push before the record fails), passes a code-preserving rewrite and fails changed code in HEAD or on the remote, another branch, and a pushed branch that disappeared |
-| `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present; gh answers github.com credentials under a Fabro stage's empty credential store |
+| `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present; gh answers github.com credentials under a Fabro stage's empty credential store; the `gh` wrapper takes Fabro's renewed token over the stage's `GITHUB_TOKEN` |
 | `tests/test-coderabbit.sh` | image | CLI installed; with `CODERABBIT_API_KEY`, `auth login` and `auth status --agent` succeed |
 | `tests/test-claude-acp.sh` | image | ACP `initialize` handshake; with a token, a full `session/prompt` round-trip returns the expected marker |
 | `tests/test-codex-acp.sh` | image | Same for Codex |
@@ -639,14 +641,14 @@ docker/
   rootfs/usr/local/lib/fidfab/  jq library: quote.jq renders untrusted text inert
   litellm/config.yaml    LiteLLM proxy model list (Gemini on Vertex AI)
 scripts/
-  setup.sh               host setup (Fabro, git author, LiteLLM provider, Brave, agents, environment, doctor)
+  setup.sh               host setup (Fabro, git author, LiteLLM provider, Brave, agents, environment, doctor, GitHub App)
   litellm-proxy.sh       init/start/stop/status/test the local LiteLLM proxy for Vertex AI
   sync-components.sh     vendor components/ into workflow directories
   render-graphs.sh       docs/graphs/*.svg
 tests/                   image tests, ACP smoke client, workflow validation
 docs/graphs/             rendered workflow graphs
 docs/vertex-ai-litellm.md  Google Cloud project, service account, monitoring, and proxy setup
-docs/github-token.md     scoped GitHub token for Fabro runs
+docs/github-token.md     GitHub App or scoped token for Fabro runs
 .devcontainer/           VS Code dev container on the sandbox image
 ```
 

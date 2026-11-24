@@ -74,12 +74,19 @@ CLAUDE_CODE_OAUTH_TOKEN = "{{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"
 CODEX_AUTH_JSON_B64     = "{{ secrets.CODEX_AUTH_JSON_B64 }}"
 CODERABBIT_API_KEY      = "{{ secrets.CODERABBIT_API_KEY }}"
 
-# GitHub access for the sandbox: push the branch, open and edit the PR, post
-# and resolve review comments, read CI results. Only Fabro's GitHub App strategy
-# limits the run's GITHUB_TOKEN to these permissions; the default token strategy
-# passes the vault's GITHUB_TOKEN as is (docs/github-token.md).
-[run.integrations.github]
-permissions = { contents = "write", pull_requests = "write", issues = "write", checks = "read", actions = "read", statuses = "read", metadata = "read" }
+# GitHub access for the sandbox. Under Fabro's GitHub App strategy each run gets
+# a one-hour token for its repository with exactly these permissions, and the
+# App must grant all of them or runs fail at their first stage: Fabro registers
+# its App without actions and statuses, so add both (docs/github-token.md). The
+# token strategy passes the vault's GITHUB_TOKEN as is and ignores this table.
+[run.integrations.github.permissions]
+contents      = "write"  # clone, push, force-push the rewritten history
+pull_requests = "write"  # open and edit the PR, reply to and resolve review threads
+issues        = "write"  # gh pr comment
+checks        = "read"   # check runs: fidfab-pr-status, gh pr checks
+statuses      = "read"   # commit statuses: fidfab-pr-status, gh pr checks
+actions       = "read"   # gh run view --log-failed
+metadata      = "read"
 
 # Fabro clones the target repository into the sandbox (depth 100);
 # fidfab-bootstrap deepens the history and attaches the image's warm caches.
