@@ -69,6 +69,9 @@ fabro_stage="cd $tmp && unset GH_TOKEN; export GITHUB_TOKEN=stale GIT_CONFIG_COU
   GIT_CONFIG_KEY_2=credential.https://github.com.helper GIT_CONFIG_VALUE_2='store --file=$tmp/fabro-git-credentials.x/store'"
 check bash -c "$fabro_stage"'; [ "$(gh auth token)" = ghs_fresh ]'
 check bash -c "$fabro_stage"'; git remote set-url origin https://github.com/o/other.git; [ "$(gh auth token)" = stale ]'
+# Another host's helper is never asked: gh would send its password to GitHub.
+check bash -c "$fabro_stage"'; git remote set-url origin https://example.com/o/r.git
+  git config credential.helper "!f() { echo username=u; echo password=other-host; }; f"; [ "$(gh auth token)" = stale ]'
 check bash -c "cd $tmp"' && unset GH_TOKEN && [ "$(GITHUB_TOKEN=stale gh auth token)" = stale ]'
 rm -rf "$tmp"
 for s in fidfab-bootstrap fidfab-claude-acp fidfab-codex-acp fidfab-coderabbit fidfab-diff fidfab-pr-status fidfab-pr-reply fidfab-doctor fidfab-warm-cache; do check command -v "$s"; done
