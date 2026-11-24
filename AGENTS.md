@@ -46,8 +46,8 @@ a Docker sandbox image and tests. Keep the following in mind.
 - `tests/test-fork-state.sh` must pass after any change to `fidfab-state` or to a helper that
   reads `.fidfab/`; each such helper restores it first (`fidfab-state restore`) when `run.env` is missing.
 - Every workflow graph sets `on_failure="exit"`, and every `workflow.toml` has the
-  `fidfab-state save` hooks and the `.fidfab/**` checkpoint exclusion (`validate-workflows.sh`
-  checks both).
+  `fidfab-state save` hooks and excludes Fabro's hook context files from the checkpoints, never
+  `.fidfab/` (`validate-workflows.sh` checks both).
 - `shellcheck -S warning` on all shell scripts; `node --check tests/acp-smoke.mjs`.
 - If `docker` is available, `docker/build.sh && tests/test-image.sh` is the full check.
 
