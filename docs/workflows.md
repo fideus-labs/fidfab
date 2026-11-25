@@ -188,9 +188,16 @@ discarding anyone's work or hiding work nobody approved:
 
 What it leaves behind:
 
-- Fabro still checkpoints the stages that follow the rewrite and pushes them, so the branch
-  ends with a few empty `fabro(...)` commits (`history.rewrite`, `history.verify`,
-  `history.done` and the nodes after them).
+- Fabro still checkpoints the stages that follow the rewrite (`history.rewrite`,
+  `history.verify`, `history.done` and the nodes after them) and pushes each empty
+  `fabro(...)` commit. A `run_complete` hook in each `workflow.toml` takes them off the
+  branch when the run has succeeded (`fidfab-history-tree trim`): it runs the check of
+  `verify` once more, drops only empty checkpoint commits from the end of the branch and
+  pushes with a lease on the commit Fabro pushed last, so the pull request ends on the last
+  rewritten commit. Nothing is trimmed when the rewrite left the history as it was. The
+  checkpoints stay when the hook fails (the run still succeeds; `fabro events` has the
+  hook's exit code in a hook note), with an image built before the helper had `trim`, and
+  in a workflow of your own that imports the component without the hook.
 - GitHub runs the checks again on the rewritten head. The code is the same, and the steward
   loop has ended, so the run does not wait for them.
 - The per-stage checkpoints are no longer on the branch on GitHub, which Fabro reads to fork

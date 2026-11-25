@@ -92,3 +92,15 @@ metadata      = "read"
 # fidfab-bootstrap deepens the history and attaches the image's warm caches.
 [run.clone]
 enabled = true
+
+# Fabro checkpoints and pushes the stages after the history rewrite as well, so the
+# rewritten branch would end with their empty `fabro(...)` commits. Once the run has
+# succeeded, after Fabro's last push, `fidfab-history-tree trim` takes them off GitHub
+# again: only after a rewrite that still verifies, only empty checkpoint commits, and with
+# a lease on HEAD. A hook that fails does not fail the run; `fabro events` has its exit
+# code in a hook note.
+[[run.hooks]]
+id       = "fidfab-trim-checkpoints"
+event    = "run_complete"
+script   = "fidfab-history-tree trim"
+blocking = true  # the push must be through before the sandbox goes

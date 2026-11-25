@@ -5,6 +5,8 @@
 # component and to nothing else, so no pull request keeps its per-stage checkpoint history.
 # The stage is Claude opus at medium effort, gets no earlier stage output in its preamble
 # (fidelity="truncate"), and its prompt keeps the commands that make the rewrite safe.
+# Each built-in workflow's run_complete hook then takes the checkpoints of the stages after
+# the rewrite off the pushed branch (fidfab-history-tree trim).
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$here"
@@ -211,6 +213,13 @@ while read -r line; do
 done < <(check_wiring .fabro/workflows/*/workflow.fabro)
 for w in small medium large verify; do
   [[ "$seen" == *" .fabro/workflows/$w/workflow.fabro "* ]] || fail "$w: the workflow does not import the PR steward"
+  # The stages after the rewrite are checkpointed and pushed too: a blocking run_complete
+  # hook trims them (workflow.toml is per workflow, so each one carries the hook). One line
+  # per [[run.hooks]] table, so the three settings must be those of the same hook.
+  awk '/^\[/ { if (on) print ""; on = /^\[\[run\.hooks\]\]/; next }
+       on { sub(/ +#.*$/, ""); gsub(/ +/, " "); printf "%s;", $0 }' ".fabro/workflows/$w/workflow.toml" |
+    grep -F 'event = "run_complete";' | grep -F 'script = "fidfab-history-tree trim";' | grep -qF 'blocking = true;' ||
+    fail "$w: workflow.toml lacks the blocking run_complete hook fidfab-history-tree trim"
 done
 
 # The stage: one agent node, Claude opus at medium effort, no preamble from earlier stages.
@@ -412,6 +421,7 @@ h() { (cd "$fix/work" && "$ht" "$@"); }
 cleared="$fix/work/.fidfab/reviews/pr-head"
 g checkout -q -B topic "$before"; g push -q --force origin topic
 h verify >/dev/null 2>&1 && fail "history-tree: verify passes without a recorded tree"
+h trim >/dev/null || fail "history-tree: trim fails when no rewrite was recorded"
 rm -f "$cleared"
 h record >/dev/null 2>&1 && fail "history-tree: record passes without the steward's head"
 # The steward cleared <before>; Fabro then pushed an empty checkpoint.
@@ -436,6 +446,53 @@ g push -q origin topic; g reset -q --hard HEAD~1
 h verify >/dev/null 2>&1 && fail "history-tree: verify misses changed code on GitHub"
 g push -q --force origin topic
 h verify >/dev/null || fail "history-tree: verify rejects the branch put back"
+# trim (the run_complete hook) takes the empty checkpoints Fabro pushed for the stages after
+# a verified rewrite off GitHub, and nothing else.
+rewritten="$(g rev-parse HEAD)"
+on_github() { git -C "$fix/remote.git" rev-parse topic; }
+h trim >/dev/null || fail "history-tree: trim fails on a branch without checkpoints"
+[[ "$(on_github)" == "$rewritten" ]] || fail "history-tree: trim moved a branch without checkpoints"
+# Checkpoints that changed the code and put it back are not empty: they stay.
+echo changed > "$fix/work/b"; g commit -q -am 'fabro(r): history.rewrite (success)'
+echo b > "$fix/work/b"; g commit -q -am 'fabro(r): history.verify (success)'
+g push -q origin topic
+h trim >/dev/null || fail "history-tree: trim fails on checkpoints that hold changes"
+[[ "$(on_github)" == "$(g rev-parse HEAD)" ]] || fail "history-tree: trim dropped a checkpoint that holds changes"
+g reset -q --hard "$rewritten"; g push -q --force origin topic
+# An empty commit that is not Fabro's stays; the two checkpoints after it go.
+g commit -q --allow-empty -m 'Empty on purpose'; kept="$(g rev-parse HEAD)"
+g commit -q --allow-empty -m 'fabro(r): history.verify (success)'
+g commit -q --allow-empty -m 'fabro(r): exit (success)'
+g push -q origin topic
+# Someone pushed on top meanwhile (the same tree, so verify passes): the lease on HEAD refuses.
+g push -q origin "$(g commit-tree -p HEAD -m theirs "HEAD^{tree}"):refs/heads/topic"
+theirs="$(on_github)"
+h trim >/dev/null 2>&1 && fail "history-tree: trim passes over a commit pushed meanwhile"
+[[ "$(on_github)" == "$theirs" ]] || fail "history-tree: trim lost a commit pushed meanwhile"
+g push -q --force origin topic
+h trim >/dev/null || fail "history-tree: trim failed"
+[[ "$(on_github)" == "$kept" ]] || fail "history-tree: trim left GitHub at '$(git -C "$fix/remote.git" log -1 --format=%s topic)', not at the last commit that is no empty checkpoint"
+# A merge is never a checkpoint, whatever its subject and tree: dropping it would drop the
+# commits it merged.
+g reset -q --hard "$kept"
+g merge -q --no-ff -s ours -m 'fabro(r): merge (success)' "$before"; g push -q origin topic
+h trim >/dev/null || fail "history-tree: trim fails on a merge"
+[[ "$(on_github)" == "$(g rev-parse HEAD)" ]] || fail "history-tree: trim dropped a merge commit"
+g reset -q --hard "$kept"
+# Code changed after the rewrite: verify fails, so does trim, and GitHub keeps what it has.
+g push -q --force origin topic
+echo changed > "$fix/work/b"; g commit -q -am tweak; g commit -q --allow-empty -m 'fabro(r): exit (success)'
+g push -q origin topic
+h trim >/dev/null 2>&1 && fail "history-tree: trim passes on changed code"
+[[ "$(on_github)" == "$(g rev-parse HEAD)" ]] || fail "history-tree: trim moved a branch that fails verify"
+g reset -q --hard HEAD~2; g push -q --force origin topic
+# The rewrite left the history as it was (the commit GitHub had at record time is still in
+# HEAD): the checkpoints stay as well.
+g rev-parse HEAD > "$cleared"
+h record >/dev/null || fail "history-tree: record failed"
+g commit -q --allow-empty -m 'fabro(r): history.rewrite (failure)'; g push -q origin topic
+h trim >/dev/null || fail "history-tree: trim fails when the history was not rewritten"
+[[ "$(on_github)" == "$(g rev-parse HEAD)" ]] || fail "history-tree: trim moved a branch the rewrite left as it was"
 g checkout -q -b elsewhere
 h verify >/dev/null 2>&1 && fail "history-tree: verify passes on a branch other than the recorded one"
 g checkout -q topic
