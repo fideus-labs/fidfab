@@ -81,8 +81,8 @@ check "coderabbit review: a review a usage limit ended fails" \
 git -C "$tmp/h1" init -q && git -C "$tmp/h1" -c user.name=t -c user.email=t@t commit -q --allow-empty -m base
 mkdir -p "$tmp/h1/.fidfab" && printf 'FIDFAB_BASE_BRANCH=fidlab-scored\nFIDFAB_MERGE_BASE=%s\n' "$(git -C "$tmp/h1" rev-parse HEAD)" > "$tmp/h1/.fidfab/run.env"
 run "$tmp/h1" CR_REVIEW="$done_line" -- fidfab-coderabbit review >/dev/null
-check "coderabbit review: from the merge base's commit when run.env names one" \
-  "$(cat "$tmp/h1/review-args")" "review --agent --base-commit $(git -C "$tmp/h1" rev-parse HEAD)"
+check "coderabbit review: from the merge base's commit, beside this branch when the base branch is not here" \
+  "$(cat "$tmp/h1/review-args")" "review --agent --base $(git -C "$tmp/h1" branch --show-current) --base-commit $(git -C "$tmp/h1" rev-parse HEAD)"
 printf 'FIDFAB_BASE_BRANCH=fidlab-scored\nFIDFAB_MERGE_BASE=%040d\n' 0 > "$tmp/h1/.fidfab/run.env"
 run "$tmp/h1" CR_REVIEW="$done_line" -- fidfab-coderabbit review >/dev/null
 check "coderabbit review: from the base branch when the merge base is no commit here" \

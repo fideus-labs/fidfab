@@ -13,9 +13,13 @@ set -euo pipefail
 [[ -f .fidfab/run.env ]] || fidfab-state restore || true   # a fork starts without .fidfab/
 [[ -f .fidfab/run.env ]] && set -a && . .fidfab/run.env && set +a
 # The commit the review starts from when run.env names one (a run's merge base, or FidLab's last scored version): it
-# is in the branch's history, a fork's too, where a local base branch such as fidlab-scored does not exist.
-if git cat-file -e "${FIDFAB_MERGE_BASE:-}^{commit}" 2>/dev/null; then base=(--base-commit "$FIDFAB_MERGE_BASE")
-else base=(--base "${FIDFAB_BASE_BRANCH:-main}"); fi
+# is in the branch's history, a fork's too, where a local base branch such as fidlab-scored does not exist. CodeRabbit
+# still wants a branch beside it (it refuses --base-commit alone): the base branch when it is here, else this one.
+branch="${FIDFAB_BASE_BRANCH:-main}"
+if git cat-file -e "${FIDFAB_MERGE_BASE:-}^{commit}" 2>/dev/null; then
+  git show-ref --verify --quiet "refs/heads/$branch" || branch="$(git branch --show-current)"
+  base=(--base "$branch" --base-commit "$FIDFAB_MERGE_BASE")
+else base=(--base "$branch"); fi
 
 case "${1:-}" in
   available)
