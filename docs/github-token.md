@@ -140,21 +140,24 @@ then:
 3. asks for the path of the `.pem` file and for the client secret, and stores both in the
    vault, with a random webhook secret (`fabro doctor` wants one; fidfab takes no webhooks).
    Delete the `.pem` file afterwards;
-4. points `[server.integrations.github]` in `~/.fabro/settings.toml` at the App, drops the
-   token strategy's `GITHUB_TOKEN` secret and restarts the server.
+4. points `[server.integrations.github]` in `~/.fabro/settings.toml` at the App, restarts the
+   server and, once it has restarted, drops the token strategy's `GITHUB_TOKEN` secret.
 
-A step that fails leaves Fabro on the token strategy; run it again. By hand, with `KEY.pem` the
-downloaded key:
+A failure before step 4 leaves Fabro on the token strategy: run the step again. If the restart
+fails, the settings already name the App and `GITHUB_TOKEN` is kept. The step warns, and a
+rerun does not try again: run `fabro server restart` yourself, which says so when the settings
+are what it cannot read, then `fabro secret rm GITHUB_TOKEN`.
+
+By hand, with `KEY.pem` the downloaded key:
 
 ```bash
 base64 -w0 < KEY.pem | fabro secret set --type file --value-stdin GITHUB_APP_PRIVATE_KEY
 fabro secret set GITHUB_APP_CLIENT_SECRET   # asks for the value; needs a terminal
 head -c 32 /dev/urandom | base64 -w0 | fabro secret set --value-stdin GITHUB_APP_WEBHOOK_SECRET
-fabro secret rm GITHUB_TOKEN
 ```
 
 Then replace the table in `~/.fabro/settings.toml` with the App's own values (the App ID is
-written as a string) and run `fabro server restart`:
+written as a string):
 
 ```toml
 [server.integrations.github]
@@ -162,6 +165,13 @@ strategy = "app"
 app_id = "123456"
 client_id = "Iv1.abc123def"
 slug = "SLUG"
+```
+
+Restart the server, and remove the token strategy's secret once it runs on the App:
+
+```bash
+fabro server restart
+fabro secret rm GITHUB_TOKEN
 ```
 
 Steps 2 to 4 follow as for a new App. What differs:

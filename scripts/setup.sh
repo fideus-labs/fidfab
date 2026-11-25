@@ -109,9 +109,9 @@ EOF
 }
 
 # github_setting <key>: its value under [server.integrations.github] in $SETTINGS, unquoted;
-# empty when unset.
+# empty when unset. The header may have spaces inside its brackets, which TOML allows.
 github_setting() {
-  awk -v k="$1" '/^[[:space:]]*\[/ { s = ($0 ~ /^[[:space:]]*\[server\.integrations\.github\][[:space:]]*(#.*)?$/) }
+  awk -v k="$1" '/^[[:space:]]*\[/ { s = ($0 ~ /^[[:space:]]*\[[[:space:]]*server\.integrations\.github[[:space:]]*\][[:space:]]*(#.*)?$/) }
     s && $0 ~ "^[[:space:]]*" k "[[:space:]]*=" { sub(/^[^=]*=[[:space:]]*/, ""); sub(/[[:space:]]*(#.*)?$/, "")
       gsub(/["\047]/, ""); print; exit }' "$SETTINGS" 2>/dev/null || true
 }
@@ -138,7 +138,7 @@ use_github_app() {
   out="$(awk -v id="$1" -v client="$2" -v slug="$3" '
     function block() { d = 1
       printf "[server.integrations.github]\nstrategy = \"app\"\napp_id = \"%s\"\nclient_id = \"%s\"\nslug = \"%s\"\n", id, client, slug }
-    /^[[:space:]]*\[/ { s = ($0 ~ /^[[:space:]]*\[server\.integrations\.github\][[:space:]]*(#.*)?$/)
+    /^[[:space:]]*\[/ { s = ($0 ~ /^[[:space:]]*\[[[:space:]]*server\.integrations\.github[[:space:]]*\][[:space:]]*(#.*)?$/)
       if (s) { block(); next } }
     s && /^[[:space:]]*[^#[:space:]]/ { next }
     { print } END { if (!d) { print ""; block() } }' "$SETTINGS")"
@@ -173,10 +173,14 @@ adopt_github_app() {
   # Last, so a failure above leaves Fabro on the strategy it had.
   use_github_app "$id" "$client" "$slug"
   note "Pointed [server.integrations.github] in $SETTINGS at the App $slug."
-  # As Fabro's own switch does: the token strategy's copy of the gh login has no use any more.
-  fabro secret rm --no-upgrade-check GITHUB_TOKEN >/dev/null 2>&1 || true
-  fabro server restart --no-upgrade-check >/dev/null 2>&1 \
-    || note "WARNING: fabro server restart failed; run it yourself so the server reads the change."
+  # Fabro's own switch drops the token strategy's copy of the gh login too. Here it goes only once
+  # the server runs on the new settings: a restart that fails can mean it could not read them.
+  if fabro server restart --no-upgrade-check >/dev/null 2>&1; then
+    fabro secret rm --no-upgrade-check GITHUB_TOKEN >/dev/null 2>&1 || true
+  else
+    note "WARNING: fabro server restart failed; run it yourself so the server reads the change, then"
+    note "fabro secret rm GITHUB_TOKEN: the token strategy's secret is still in the vault."
+  fi
 }
 
 step_github_app() {

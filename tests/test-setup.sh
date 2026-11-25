@@ -17,6 +17,7 @@ cat > "$tmp/bin/fabro" <<'STUB'
 [[ "$1 ${2:-}" == "secret list" ]] && for n in ${FABRO_STUB_SECRETS:-}; do printf '    "name": "%s",\n' "$n"; done
 [[ "$*" == *--non-interactive* && -n "${FABRO_STUB_FAIL_SCRIPTED:-}" ]] && exit 2
 [[ "$1 ${2:-}" == "secret set" && -n "${FABRO_STUB_FAIL_SECRET:-}" ]] && exit 1
+[[ "$1 ${2:-}" == "server restart" && -n "${FABRO_STUB_FAIL_RESTART:-}" ]] && exit 1
 [[ "$1" == --version ]] && echo "fabro 0.0.0-stub"
 exit 0
 STUB
@@ -180,9 +181,13 @@ check "... without registering" ""
 # A slug at the first prompt adopts that App instead of registering one: its IDs and owner from
 # GitHub, a key and secrets into the vault, then the settings table (comments and other tables
 # kept). Unless gh can read the App and the file is a private key, Fabro is left as it was.
+# The header has the spaces TOML allows inside its brackets: missing it would add a second table.
 printf -- '-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----\n' > "$tmp/key.pem"
-printf '# kept\n[server.integrations.github] # token\nstrategy = "token"\n\n# web\n[server.web]\nenabled = true\n' \
-  > "$tmp/apphome/.fabro/settings.toml"
+token_settings() {
+  printf '# kept\n[ server.integrations.github ] # token\nstrategy = "token"\n\n# web\n[server.web]\nenabled = true\n' \
+    > "$tmp/apphome/.fabro/settings.toml"
+}
+token_settings
 adopt() { printf '%s\n%s\n' "${2:-acme-bot}" "$1" | HOME="$tmp/apphome" scripts/setup.sh github-app 2>&1; }
 on_token() { grep -qxF 'strategy = "token"' "$tmp/apphome/.fabro/settings.toml"; }
 if ! adopt "$tmp/key.pem" >/dev/null && ! GH_STUB_APP="123456 Iv1.abc acme" adopt /dev/null >/dev/null &&
@@ -197,18 +202,25 @@ if ! FABRO_STUB_FAIL_SECRET=1 GH_STUB_APP="123456 Iv1.abc acme" adopt "$tmp/key.
 else echo "FAIL github-app switched strategy although a secret failed to store"; fail=1; fi
 : > "$FIDFAB_TEST_LOG"
 out="$(GH_STUB_APP="123456 Iv1.abc acme" adopt "$tmp/key.pem")"
-check "github-app adopts an existing App: key and secrets in, gh token out, a restart, no registration" \
-  "secret set --no-upgrade-check --type file --value-stdin --description private key of the GitHub App acme-bot GITHUB_APP_PRIVATE_KEY
+stored="secret set --no-upgrade-check --type file --value-stdin --description private key of the GitHub App acme-bot GITHUB_APP_PRIVATE_KEY
 secret set --no-upgrade-check --description client secret of the GitHub App acme-bot GITHUB_APP_CLIENT_SECRET
 secret set --no-upgrade-check --value-stdin --description random: fidfab takes no GitHub webhooks GITHUB_APP_WEBHOOK_SECRET
-secret rm --no-upgrade-check GITHUB_TOKEN
 server restart --no-upgrade-check"
+check "github-app adopts an existing App: key and secrets in, a restart, then the gh token out, no registration" \
+  "$stored
+secret rm --no-upgrade-check GITHUB_TOKEN"
 want=$'# kept\n[server.integrations.github]\nstrategy = "app"\napp_id = "123456"\nclient_id = "Iv1.abc"\nslug = "acme-bot"\n\n# web\n[server.web]\nenabled = true'
 if [[ "$(cat "$tmp/apphome/.fabro/settings.toml")" == "$want" &&
       "$out" == *"https://github.com/organizations/acme/settings/apps/acme-bot and"* &&
       "$out" == *"https://github.com/apps/acme-bot/installations/new"* ]]; then
   echo "ok   github-app points the settings at the adopted App and names its pages"
 else echo "FAIL github-app adopted settings: $(cat "$tmp/apphome/.fabro/settings.toml") / $out"; fail=1; fi
+# A restart that fails may mean the server could not read the settings: the gh token stays.
+token_settings
+out="$(FABRO_STUB_FAIL_RESTART=1 GH_STUB_APP="123456 Iv1.abc acme" adopt "$tmp/key.pem")"
+check "github-app keeps the gh token when the server does not restart" "$stored"
+if [[ "$out" == *"WARNING: fabro server restart failed"* ]]; then echo "ok   ... and says so"
+else echo "FAIL github-app restart failure went unreported: $out"; fail=1; fi
 # Settings without the table get it appended; a personal App's page; a key path under ~.
 printf '[server.web]\nenabled = true\n' > "$tmp/apphome/.fabro/settings.toml"
 cp "$tmp/key.pem" "$tmp/apphome/key.pem"
