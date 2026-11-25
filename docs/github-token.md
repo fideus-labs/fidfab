@@ -274,7 +274,7 @@ before you store it.
    table above.
 
 `scripts/setup.sh` leaves the secret alone once Fabro is installed, but rerunning the
-`fabro install --github-strategy token` command from the README's step 1 copies `gh auth token`
+`fabro install --github-strategy token` command from step 1 of [setup.md](setup.md) copies `gh auth token`
 into it again.
 
 When the token expires, clones and pushes fail. **Regenerate token** on the token's GitHub page

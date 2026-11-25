@@ -26,7 +26,7 @@ scripts/setup.sh fabro            # Fabro + latest pre-release
 docker/build.sh                   # image (slow the first time)
 tests/test-image.sh               # tool, CodeRabbit, Claude ACP, Codex ACP tests
 tests/validate-workflows.sh       # workflow validation
-fabro run verify --goal "Verify the current branch" --target OWNER/REPO@branch
+fabro run verify --environment fidfab --goal "Verify the current branch" --target OWNER/REPO@branch
 ```
 
 Use the `small` workflow on fidfab itself for non-trivial changes; it is the

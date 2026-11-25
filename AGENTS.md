@@ -121,6 +121,6 @@ a Docker sandbox image and tests. Keep the following in mind.
 ## Style
 
 - Commit messages: imperative subject under 72 characters, body explains why.
-- No emojis. Plain Markdown. Do not add dependencies to the image without a comment
-  explaining what uses them.
+- Plain Markdown. Do not add dependencies to the image without a comment explaining what
+  uses them.
 - Copyright Fideus Labs LLC, MIT licensed.

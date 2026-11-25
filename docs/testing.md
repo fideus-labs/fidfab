@@ -1,0 +1,24 @@
+# Tests
+
+| Test | Where it runs | Checks |
+|---|---|---|
+| `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow, each of which ends the run on a failed stage (`on_failure="exit"`) |
+| `scripts/sync-components.sh --check` | host, CI | vendored components match `components/` |
+| `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again; the `author` step writes `git config` identity to `[run.git.author]` once; the `github-app` step registers an App only when Fabro has none, or adopts an existing one (its IDs from `gh`, a key and secrets into the vault, then the settings table), adds the dev-token login back next to GitHub sign-in once, and prints its permission and installation pages (stubbed `fabro`/`gh`/`claude`/`codex`) |
+| `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, the Dockerfile quotes the specs that receive it, and a host git URL rewrite reaches the build only when it reads without credentials (stubbed `docker`/`claude`/`codex`) |
+| `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
+| `tests/test-review-wrappers.sh` | host, CI | after `fabro fork`, whose fresh sandbox missed bootstrap, `fidfab-codex-acp` writes `auth.json` (mode 600) from `CODEX_AUTH_JSON_B64` unless Codex has one and, signed in, answers `initialize` with no sign-in method, and `fidfab-coderabbit available` logs in again from `CODERABBIT_API_KEY` without touching it; `not_authenticated` without a key is unavailable; `fidfab-coderabbit review` saves the review and fails unless it completed (stubbed `codex-acp`/`coderabbit`) |
+| `tests/test-pr-steward.sh` | host, CI | `fidfab-pr-status` lists threads with authors, quotes comment text inert, routes gated runs to the screen, counts failed and pending legacy commit statuses, and records its label as `pr_status` and the head it checked in `pr-head`; `fidfab-pr-reply` posts only screened threads, pushes first, does not repeat posted replies on retry, and its preview flags a push that fails a dry run (stubbed `gh`) |
+| `tests/test-logical-commits.sh` | host, CI | every workflow hands over from the PR steward to the history rewrite and to nothing else, and the rewrite leads on (not nowhere, not back to the steward), with node statements wrapped over lines read and any reference or edge the scanner cannot read failing; the rewrite runs only on `context.pr_status=done`; the stage is Claude opus at medium effort with `fidelity="truncate"`, and its prompt keeps the pull-request lookup without forks, the fetch-failure stop, the identical-tree-id checks (against GitHub and against the state before), the clean-work-tree checks with untracked files listed, the rule that GitHub moved only by checkpoints since the recorded commit or holds a recorded attempt (a push, rewording or rewind by someone else stops it), the leased force-push and the `Fabro-Run:` trailer; the agent sits between the `fidfab-history-tree record` and `verify` nodes (a failed record skips it), a failed verify stops at a human gate, and the helper records only when GitHub moved forward from the steward's cleared head along the checkout (a rewind or foreign push before the record fails), passes a code-preserving rewrite and fails changed code in HEAD or on the remote, another branch, and a pushed branch that disappeared |
+| `tests/test-tools.sh` | image | pixi, rustup/cargo, vite+, claude, codex, coderabbit, serena, ccc, gh, skills present; gh answers github.com credentials under a Fabro stage's empty credential store; the `gh` wrapper takes Fabro's renewed token over the stage's `GITHUB_TOKEN` |
+| `tests/test-coderabbit.sh` | image | CLI installed; with `CODERABBIT_API_KEY`, `auth login` and `auth status --agent` succeed |
+| `tests/test-claude-acp.sh` | image | ACP `initialize` handshake; with a token, a full `session/prompt` round-trip returns the expected marker |
+| `tests/test-codex-acp.sh` | image | Same for Codex |
+| `tests/test-image.sh` | host | Runs the image tests in `docker run`, passing credentials through |
+
+`tests/acp-smoke.mjs` is a dependency-free ACP client (JSON-RPC over stdio) used by both ACP
+tests; it follows the protocol's `initialize` → `session/new` → `session/prompt` sequence
+([ACP schema](https://agentclientprotocol.com/protocol/schema)).
+
+GitHub Actions (`.github/workflows/ci.yml`) runs validation, shellcheck, hadolint, and the
+Node syntax check on every push and PR; the image build and tool tests run on manual dispatch.
