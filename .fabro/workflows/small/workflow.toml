@@ -13,7 +13,7 @@ graph = "workflow.fabro"
 
 # Default model for Fabro-native nodes: Gemini 3.8 Flash on Vertex AI, routed
 # through the local LiteLLM proxy. The model ID is declared by the server's
-# ~/.fabro/settings.toml (`scripts/setup.sh litellm`, README step 2). The
+# ~/.fabro/settings.toml (`scripts/setup.sh litellm`, docs/setup.md step 2). The
 # Claude Code and Codex stages (backend="acp") use their own subscriptions and
 # ignore this.
 [run.model]
@@ -45,7 +45,7 @@ draft_pr = "false"
 steward_gate = "true"
 
 # ---------------------------------------------------------------------------
-# Sandbox: the locally built fidfab image (see README "Build the image").
+# Sandbox: the locally built fidfab image (see docs/setup.md step 4).
 # The [environments.fidfab] table below only serves `fabro validate` on this
 # machine: Fabro never sends [environments.*] to the server, and `fabro run`
 # ignores the id below unless it is also passed as `--environment fidfab`
@@ -68,7 +68,7 @@ stop_on_terminal = true
 
 # Agent credentials are resolved from the Fabro vault when the run starts and
 # injected into the sandbox environment. They never appear in workflow text,
-# events or logs. Create them with `fabro secret set NAME` (see README).
+# events or logs. Create them with `fabro secret set NAME` (see docs/setup.md step 5).
 [run.environment.env]
 CLAUDE_CODE_OAUTH_TOKEN = "{{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"
 CODEX_AUTH_JSON_B64     = "{{ secrets.CODEX_AUTH_JSON_B64 }}"

@@ -9,7 +9,7 @@
 # cocoindex-code (for Codex), the planning-with-files / CodeRabbit / Cloudflare
 # security skills, and a warmed clone of the target repository.
 #
-# Build with ./docker/build.sh (see README.md).
+# Build with ./docker/build.sh (see docs/setup.md step 4).
 
 ARG UBUNTU_VERSION=26.04
 FROM ubuntu:${UBUNTU_VERSION}
