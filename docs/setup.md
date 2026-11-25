@@ -52,7 +52,8 @@ token's login (or the App's bot) and noreply address: it appends
 [`[run.git.author]`](https://docs.fabro.sh/administration/server-configuration#run-git-author-section)
 with `git config user.name` and `user.email` to `~/.fabro/settings.toml` and restarts the server.
 Fabro injects them as `GIT_AUTHOR_*` and `GIT_COMMITTER_*` into every run. An existing block is
-kept, without a restart; the step warns when it no longer matches `git config`.
+kept, without a restart; the step warns when it no longer matches `git config`. `fabro run` then
+warns that `settings.toml` contains `run`: keep the block ([limitations.md](limitations.md)).
 
 ```toml
 [run.git.author]
