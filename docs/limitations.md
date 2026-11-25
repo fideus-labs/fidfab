@@ -22,7 +22,11 @@
   error either. `fabro inspect <run>` shows the resolved image under `run.environment.image`.
 - `fabro run` does not send `[run]` settings from `~/.fabro/settings.toml` to the server (Fabro
   0.415 warns about it), so the default model lives in each `workflow.toml` `[run.model]`. Remove
-  any `[run.model]` left in `settings.toml` by the former DeepSeek setup step.
+  any `[run.model]` left in `settings.toml` by the former DeepSeek setup step. The warning stays
+  as long as the `[run.git.author]` block of `scripts/setup.sh author` is there, and that block
+  must stay: a server on the same machine reads the file itself and applies it to every run
+  (`fabro inspect <run>` shows it under `run.git.author`; seen with Fabro 0.423). It is one
+  person's identity, so it does not belong in a checked-in `workflow.toml`.
 - If the install wizard set up OpenAI via Codex device login, that ChatGPT-subscription OpenAI
   credential stays unused; the workflows select the `litellm` provider explicitly.
 - Vertex AI Standard pay-as-you-go capacity is shared; bursts can return `429`. LiteLLM retries,
