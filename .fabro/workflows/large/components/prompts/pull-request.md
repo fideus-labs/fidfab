@@ -13,8 +13,8 @@
    - a concise, descriptive **title** that summarises the change;
    - a **description** with sections: *What changed*, *Why* (based on the task context:
      "{{ goal }}"), *Implementation notes* (important details, trade-offs, follow-ups),
-     *Verification* (tests added, review stages that ran: coverage, CodeRabbit or built-in
-     review, Codex review, Claude review, security review, and the personal-data
+     *Verification* (tests added, review stages that ran: coverage, Codex review, Claude
+     review, CodeRabbit or built-in review, security review, and the personal-data
      decision with the audit result when it ran). A review record that says the review
      was skipped, or that Claude's built-in review stood in for CodeRabbit, goes first in
      *Verification*, in bold.

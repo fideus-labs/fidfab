@@ -14,6 +14,10 @@ and saved its complete review to `.fidfab/reviews/coderabbit.md`, so start from 
    review: severity, decision (fixed / fixed-differently / not-an-issue / deferred) and
    the evidence.
 
+The Codex and Claude reviews, in a workflow that runs them, have already been addressed
+(`.fidfab/reviews/codex-review-response.md`, `.fidfab/reviews/claude-review-response.md`);
+note when a finding duplicates one already handled.
+
 If a confirming re-run fails (a usage limit or a login error), say at the top of
 `.fidfab/reviews/coderabbit-response.md` that the fixes were not confirmed by CodeRabbit,
 and finish; do not invent findings.

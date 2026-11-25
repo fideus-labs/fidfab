@@ -3,8 +3,9 @@
 Review file: `.fidfab/reviews/claude-review.md`
 Response file: `.fidfab/reviews/claude-review-response.md`
 
-The Codex review has already been addressed (`.fidfab/reviews/codex-review-response.md`);
-note when a finding duplicates one already handled.
+The Codex review, in a workflow that runs it, has already been addressed
+(`.fidfab/reviews/codex-review-response.md`); note when a finding duplicates one already
+handled.
 
 {% include "partials/verify-and-address.md" %}
 

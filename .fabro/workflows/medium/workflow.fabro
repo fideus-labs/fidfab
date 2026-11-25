@@ -19,9 +19,9 @@ digraph FidfabMedium {
 
   has_changes [label="Branch has changes?", script="fidfab-diff --has-changes", output_schema="routing"]
   coverage   [import="components/coverage.fabro"]
-  coderabbit [import="components/coderabbit-review.fabro"]
   codex      [import="components/codex-review.fabro"]
   claude     [import="components/claude-review.fabro"]
+  coderabbit [import="components/coderabbit-review.fabro"]
   security   [import="components/security-review.fabro"]
   personal   [import="components/personal-data-audit.fabro"]
   ship       [import="components/commit-and-pr.fabro"]
@@ -32,7 +32,7 @@ digraph FidfabMedium {
   start -> bootstrap -> plan -> implement -> has_changes
   has_changes -> coverage [label="has-changes"]
   has_changes -> done     [label="no-changes"]
-  coverage -> coderabbit -> codex -> claude -> security -> personal -> ship -> steward
+  coverage -> codex -> claude -> coderabbit -> security -> personal -> ship -> steward
   steward -> history -> done
   done -> exit
 }

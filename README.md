@@ -27,7 +27,7 @@
 
 - 🧭 **Understanding** -- plans and roadmaps you read and approve at a human gate, as many
   rounds as needed, before code is written.
-- 🔬 **Verification** -- a coverage check, CodeRabbit, Codex and Claude reviews, a security
+- 🔬 **Verification** -- a coverage check, Codex, Claude and CodeRabbit reviews, a security
   review and a personal-data audit run over the diff; the findings of each review are
   verified and addressed, with a Markdown record of the approach taken per finding.
 - 📌 **Reproducibility** -- a pinned Ubuntu 26.04 image with pixi and Rust toolchains, and
@@ -73,9 +73,9 @@ Each stage is a Fabro subgraph in `components/` that can be imported into your o
 |---|---|
 | `bootstrap.fabro` | Materialises credentials, ensures the checkout (deepens Fabro's shallow clone, or clones from the image's baked-in repo), attaches warm caches, records base/head refs and the plan slug |
 | `coverage.fabro` | opus checks the diff for uncovered behaviour and adds tests |
-| `coderabbit-review.fabro` | `coderabbit review --agent` in a script node that fails unless the review completed; if CodeRabbit is not logged in it waits 3 minutes and checks again; a review that cannot run stops at a gate (retry, or Claude's built-in code review, recorded as such); opus fixes issues following section "4. Fix Issues (Autonomous Workflow)" of the [CodeRabbit code-review skill](https://github.com/coderabbitai/skills) |
 | `codex-review.fabro` | Codex (terra) review with the prioritised review prompt, then opus verifies and addresses, writing `docs/plans/<slug>/review-codex.md`; a failed review stops at a gate (retry, or continue without it, recorded in `.fidfab/reviews/`) |
 | `claude-review.fabro` | Same review by Claude (fable), then opus verifies and addresses |
+| `coderabbit-review.fabro` | `coderabbit review --agent` in a script node that fails unless the review completed; if CodeRabbit is not logged in it waits 3 minutes and checks again; a review that cannot run stops at a gate (retry, or Claude's built-in code review, recorded as such); opus fixes issues following section "4. Fix Issues (Autonomous Workflow)" of the [CodeRabbit code-review skill](https://github.com/coderabbitai/skills) |
 | `security-review.fabro` | opus security review of the changes, then verify and address |
 | `personal-data-audit.fabro` | Codex decides whether the changes touch potentially personal data; if so runs the [Cloudflare security-audit skill](https://github.com/cloudflare/security-audit-skill) and opus addresses the findings |
 | `commit-and-pr.fabro` | Descriptive commit, `gh pr create --fill`, then title and body rewritten from the diff |
@@ -108,7 +108,7 @@ The Claude Code and Codex stages use your subscriptions; Fabro-native steps defa
    human gate; you approve or type feedback, as many rounds as needed.
 2. **Implement** -- Claude Code implements the approved plan in the sandbox.
 3. **Verify** -- the verification pipeline runs over the diff: a coverage check, then
-   CodeRabbit, Codex (terra) and Claude (fable) reviews, a security review and the
+   Codex (terra), Claude (fable) and CodeRabbit reviews, a security review and the
    personal-data audit. opus verifies and addresses the findings of each review and writes a
    Markdown record of the approach taken per finding.
 4. **Ship** -- opus writes the commit, opens the PR with `gh pr create --fill`, then rewrites
