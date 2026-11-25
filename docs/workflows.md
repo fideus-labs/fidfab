@@ -11,10 +11,10 @@ components.
    human gate; you approve or type feedback, as many rounds as needed.
 2. Claude Code implements the approved plan in the sandbox.
 3. The verification pipeline runs over the diff: coverage of uncovered behaviour (opus),
-   CodeRabbit review and autonomous fix (opus), Codex (terra) review, Claude (fable) review, a
+   Codex (terra) review, Claude (fable) review, CodeRabbit review and autonomous fix (opus), a
    security review, a personal-data decision with an optional Cloudflare security audit, each
    followed by an opus "verify and address" pass that writes a Markdown record of the approach
-   taken per finding. A CodeRabbit or Codex review that cannot run (a usage limit, a login) stops
+   taken per finding. A Codex or CodeRabbit review that cannot run (a usage limit, a login) stops
    at a human gate: retry once it is lifted, or continue without it (Claude's built-in review
    stands in for CodeRabbit), which the records and the PR description say. Any other failed stage
    ends the run unless its component routes the failure (the steward tries again after the hour, a
@@ -49,7 +49,7 @@ against this table, using the role word in each node's `class` (`implement`, `re
 | Claude implementation (`small` and `medium` `implement`) | `xhigh` |
 | Claude planning (`medium` plan and its revisions; `large` roadmap draft, its revisions and the response to the critique) | `xhigh` |
 | Verify and address after the Claude review and the Codex review | `xhigh` |
-| Claude and Codex review (CodeRabbit and built-in review, Codex review, Claude review, security review, personal-data security audit, `large` roadmap critique) | `high` |
+| Claude and Codex review (Codex review, Claude review, CodeRabbit and built-in review, security review, personal-data security audit, `large` roadmap critique) | `high` |
 | Every other Claude and Codex stage (coverage, verify and address after the other reviews, personal-data decision, commit, pull request, steward, history rewrite) | `medium` |
 | Gemini (the `[run.model]` default, and any native node) | `medium` |
 

@@ -30,6 +30,11 @@ a Docker sandbox image and tests. Keep the following in mind.
 - `tests/test-logical-commits.sh` must pass after any change to `logical-commits.fabro`, its
   prompt, `fidfab-history-tree` or a workflow graph (`validate-workflows.sh` runs it too). A workflow that imports
   `pr-steward.fabro` imports `logical-commits.fabro` as the steward's only successor.
+- `tests/test-pipeline-order.sh` must pass after any change to a workflow graph or to a prompt
+  that addresses a review (`validate-workflows.sh` runs it too). `small`, `medium` and `verify`
+  run coverage, the Codex review, the Claude review, the CodeRabbit review, the security review,
+  the personal-data audit, commit and PR, the steward and the history rewrite, in that order;
+  the prompt that addresses a review names the response record of every review before it.
 - `tests/test-bootstrap.sh` must pass after any change to `fidfab-bootstrap`.
 - `tests/test-setup.sh` must pass after any change to `scripts/setup.sh`.
 - `tests/test-build.sh` must pass after any change to `docker/build.sh`.
