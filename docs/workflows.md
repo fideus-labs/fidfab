@@ -204,7 +204,7 @@ Many tasks start as an exploratory conversation. The sandbox supports both order
 # 1. Explore in an interactive Claude Code session (host or dev container), on a worktree:
 git worktree add ../repo-threads -b threads
 cd ../repo-threads && claude
-# 2. Push the branch and let the factory verify, review, and steward it:
+# 2. Commit, push the branch and let the factory verify, review, and steward it:
 git push -u origin threads
 fabro run verify --environment fidfab --goal "Verify and land the threads branch" --target OWNER/REPO@threads
 ```
