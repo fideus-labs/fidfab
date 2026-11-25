@@ -18,9 +18,11 @@
 #   trim    when the run has succeeded (the workflows' run_complete hook): Fabro committed and
 #           pushed an empty checkpoint for every stage after the rewrite. Run verify again, then
 #           move <branch> on GitHub back to the last commit that is not such a checkpoint (one
-#           parent, the parent's tree, subject `fabro(...): ...`), with a lease on HEAD. Nothing
-#           is done without a record (no rewrite ran), or while the commit GitHub had at record
-#           time is still in HEAD (the rewrite left the history as it was).
+#           parent, the parent's tree, subject `fabro(...): ...`) or that predates the rewrite
+#           (is in the commit GitHub had at record time), with a lease on HEAD. Nothing is done
+#           without a record (no rewrite ran), or while the commit GitHub had at record time is
+#           still in HEAD (the rewrite left the history as it was); trim fails, changing
+#           nothing, when that commit is not in the checkout.
 #
 # Commits are compared by tree only, so moving, squashing and rewording pass; any change to
 # the code, including a file left in the work tree that Fabro's checkpoint then committed and
@@ -92,15 +94,25 @@ case "${1:-}" in
     [[ -s "$file" ]] || { echo "nothing to trim: no rewrite was recorded"; exit 0; }
     "$0" verify >/dev/null  # the same conditions, and its fetch
     { read -r _; read -r branch; read -r remote; } < "$file" || true
+    # $remote bounds the scan: without it, the checkpoints Fabro added after the rewrite
+    # cannot be told from the history before it.
+    git cat-file -e "$remote^{commit}" 2>/dev/null || {
+      echo "FAIL: $remote, which GitHub had before the rewrite, is not in this checkout: cannot tell where the rewrite began" >&2
+      exit 1
+    }
     if git merge-base --is-ancestor "$remote" HEAD; then
       echo "nothing to trim: the rewrite left the history as it was"
       exit 0
     fi
+    # $remote is not in HEAD, so every commit of HEAD from before the rewrite is in $remote:
+    # the scan stops at the first one, even when it is an empty checkpoint the rewritten
+    # history ends on (a branch collapsed onto its base, say). An error counts as one too.
+    predates() { git merge-base --is-ancestor "$1" "$remote" || (($? != 1)); }
     head="$(git rev-parse HEAD)"
     keep="$head"
     while read -r _ parent more < <(git rev-list --parents -n 1 "$keep") &&
       [[ -n "$parent" && -z "$more" && "$(tree "$keep")" == "$(tree "$parent")" &&
-        "$(git log -1 --format=%s "$keep")" == 'fabro('*'): '* ]]; do
+        "$(git log -1 --format=%s "$keep")" == 'fabro('*'): '* ]] && ! predates "$keep"; do
       keep="$parent"
     done
     [[ "$keep" != "$head" ]] || { echo "nothing to trim: $branch does not end with empty checkpoints"; exit 0; }

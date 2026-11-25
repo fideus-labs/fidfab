@@ -486,6 +486,30 @@ g push -q origin topic
 h trim >/dev/null 2>&1 && fail "history-tree: trim passes on changed code"
 [[ "$(on_github)" == "$(g rev-parse HEAD)" ]] || fail "history-tree: trim moved a branch that fails verify"
 g reset -q --hard HEAD~2; g push -q --force origin topic
+# The rewritten head is itself an empty checkpoint from before the rewrite: a net-zero branch
+# collapsed onto its base, which an earlier run left ending on a checkpoint. trim drops what
+# Fabro added after the rewrite and stops there; the scan never goes past the history GitHub
+# had at record time.
+g commit -q --allow-empty -m 'fabro(old): exit (success)'; onto="$(g rev-parse HEAD)"
+g push -q origin "$onto:refs/heads/main"; g fetch -q origin
+echo c > "$fix/work/c"; g add c; g commit -q -m 'fabro(r): implement (success)'
+g rm -q c; g commit -q -m 'fabro(r): fix (success)'; g push -q --force origin topic
+g rev-parse HEAD > "$cleared"
+h record >/dev/null || fail "history-tree: record failed"
+g reset -q --hard "$onto"; g push -q --force origin topic
+g commit -q --allow-empty -m 'fabro(r): history.rewrite (success)'
+g commit -q --allow-empty -m 'fabro(r): exit (success)'; g push -q origin topic
+# Without the commit GitHub had at record time the boundary is unknown: trim fails and
+# leaves the branch.
+recorded="$(cat "$fix/work/.fidfab/reviews/history-tree")"
+printf '%s\n%s\n%s\n' "$(g rev-parse "HEAD^{tree}")" topic "$(printf '0%.0s' {1..40})" > "$fix/work/.fidfab/reviews/history-tree"
+pushed="$(on_github)"
+h trim >/dev/null 2>&1 && fail "history-tree: trim passes without the commit GitHub had before the rewrite"
+[[ "$(on_github)" == "$pushed" ]] || fail "history-tree: trim moved the branch without knowing where the rewrite began"
+printf '%s\n' "$recorded" > "$fix/work/.fidfab/reviews/history-tree"
+h trim >/dev/null || fail "history-tree: trim fails on a rewrite onto an empty checkpoint"
+[[ "$(on_github)" == "$onto" ]] || fail "history-tree: trim left GitHub at '$(git -C "$fix/remote.git" log -1 --format=%s topic)', not at the rewritten head (an empty checkpoint from before the rewrite)"
+g reset -q --hard "$onto"; g push -q --force origin topic
 # The rewrite left the history as it was (the commit GitHub had at record time is still in
 # HEAD): the checkpoints stay as well.
 g rev-parse HEAD > "$cleared"
