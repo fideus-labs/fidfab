@@ -186,7 +186,8 @@ That GitHub token is your `gh` login, with `repo` scope on every repository you 
 every agent in every run can use it; the `permissions` table in `workflow.toml` does not limit
 it. Switch Fabro to a GitHub App, which gives each run a one-hour token limited to its
 repository and the workflow's permissions: `scripts/setup.sh github-app`, then the steps it
-prints ([docs/github-token.md](docs/github-token.md)).
+prints ([docs/github-token.md](docs/github-token.md)). It registers a new App, or takes one the
+organization already has.
 
 `scripts/setup.sh author` then makes run commits carry your own identity instead of the GitHub
 token's login (or the App's bot) and noreply address: it appends
@@ -610,7 +611,7 @@ Recommended host extensions: `anthropic.claude-code`, `openai.chatgpt` (Codex),
 |---|---|---|
 | `tests/validate-workflows.sh` | host, CI | `fabro validate` on every workflow, each of which ends the run on a failed stage (`on_failure="exit"`) |
 | `scripts/sync-components.sh --check` | host, CI | vendored components match `components/` |
-| `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again; the `author` step writes `git config` identity to `[run.git.author]` once; the `github-app` step registers an App only when Fabro has none, adds the dev-token login back next to GitHub sign-in once, and prints its permission and installation pages (stubbed `fabro`/`gh`/`claude`/`codex`) |
+| `tests/test-setup.sh` | host, CI | `scripts/setup.sh fabro` runs the scripted `--skip-llm` install when `gh` is logged in, else the wizard; a secret already in the vault is not requested again; the `author` step writes `git config` identity to `[run.git.author]` once; the `github-app` step registers an App only when Fabro has none, or adopts an existing one (its IDs from `gh`, a key and secrets into the vault, then the settings table), adds the dev-token login back next to GitHub sign-in once, and prints its permission and installation pages (stubbed `fabro`/`gh`/`claude`/`codex`) |
 | `tests/test-build.sh` | host, CI | `docker/build.sh` passes the host's `claude` / `codex` version to the build as a floor unless the version is set by hand, the Dockerfile quotes the specs that receive it, and a host git URL rewrite reaches the build only when it reads without credentials (stubbed `docker`/`claude`/`codex`) |
 | `tests/test-bootstrap.sh` | host, CI | `fidfab-bootstrap` records the plan slug: the `plan_slug` input, or `<date>-<topic branch the run started from>` when it is still `task` |
 | `tests/test-review-wrappers.sh` | host, CI | after `fabro fork`, whose fresh sandbox missed bootstrap, `fidfab-codex-acp` writes `auth.json` (mode 600) from `CODEX_AUTH_JSON_B64` unless Codex has one and, signed in, answers `initialize` with no sign-in method, and `fidfab-coderabbit available` logs in again from `CODERABBIT_API_KEY` without touching it; `not_authenticated` without a key is unavailable; `fidfab-coderabbit review` saves the review and fails unless it completed (stubbed `codex-acp`/`coderabbit`) |

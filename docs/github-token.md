@@ -46,8 +46,9 @@ only, valid for an hour. It renews the sandbox's git credentials every minute an
 new process a fresh `GITHUB_TOKEN`. None of your own tokens reaches a sandbox, and there is no
 token for you to rotate.
 
-`scripts/setup.sh github-app` runs step 1, keeps the CLI's dev-token login (below) and prints
-the addresses for steps 2 and 3; rerun it to see them again.
+`scripts/setup.sh github-app` runs step 1, for a new App or for
+[one that already exists](#an-app-that-already-exists), keeps the CLI's dev-token login (below)
+and prints the addresses for steps 2 and 3; rerun it to see them again.
 
 1. **Register the App** on the host that runs the Fabro server. `OWNER` is the organization that
    owns the target repositories:
@@ -123,6 +124,76 @@ the addresses for steps 2 and 3; rerun it to see them again.
    pull request comment it posts comes from `SLUG[bot]`. As with any token, a quiet pull
    request (checks green, no open review threads) does not exercise review-thread replies or
    failed CI logs; those are first used when a later run gets there.
+
+### An App that already exists
+
+`fabro install github` only registers a new App. To use one the organization already has, such
+as the App of another Fabro server, give `scripts/setup.sh github-app` its slug (the last part
+of `https://github.com/apps/SLUG`) when it asks for an existing App. In place of step 1 it
+then:
+
+1. reads the App's ID and client ID with `gh api apps/SLUG`, so `gh` must be logged in to an
+   account that can see the App;
+2. names the App's settings page, where you generate a private key (GitHub downloads a `.pem`
+   file) and a new client secret. An App holds several of each, so whatever uses it today
+   keeps working;
+3. asks for the path of the `.pem` file and for the client secret, and stores both in the
+   vault, with a random webhook secret (`fabro doctor` wants one; fidfab takes no webhooks).
+   Delete the `.pem` file afterwards;
+4. points `[server.integrations.github]` in `~/.fabro/settings.toml` at the App, restarts the
+   server and, once it has restarted, drops the token strategy's `GITHUB_TOKEN` secret.
+
+A failure before step 4 leaves Fabro on the token strategy: run the step again. If the restart
+fails, the settings already name the App and `GITHUB_TOKEN` is kept. The step warns, and a
+rerun does not try again: run `fabro server restart` yourself, which says so when the settings
+are what it cannot read, then `fabro secret rm GITHUB_TOKEN`. The step also warns when it
+cannot confirm that the secret left the vault; the same command removes it.
+
+By hand, with `KEY.pem` the downloaded key:
+
+```bash
+base64 -w0 < KEY.pem | fabro secret set --type file --value-stdin GITHUB_APP_PRIVATE_KEY
+fabro secret set GITHUB_APP_CLIENT_SECRET   # asks for the value; needs a terminal
+head -c 32 /dev/urandom | base64 -w0 | fabro secret set --value-stdin GITHUB_APP_WEBHOOK_SECRET
+```
+
+Then replace the table in `~/.fabro/settings.toml` with the App's own values (the App ID is
+written as a string):
+
+```toml
+[server.integrations.github]
+strategy = "app"
+app_id = "123456"
+client_id = "Iv1.abc123def"
+slug = "SLUG"
+```
+
+Restart the server, and remove the token strategy's secret only if it restarted on the App:
+
+```bash
+fabro server restart && fabro secret rm GITHUB_TOKEN
+```
+
+Steps 2 to 4 follow as for a new App. What differs:
+
+- **Permissions.** The App needs every permission in [What the runs need](#what-the-runs-need),
+  not only the two Fabro leaves out. It may hold more: a run's token gets the workflow's
+  permissions alone.
+- **Owner.** A private App installs only on the account that owns it, so it has to belong to
+  the owner of the target repositories.
+- **Sign-in.** No GitHub sign-in is set up: `[server.auth]` keeps its methods, apart from the
+  dev-token login, which the step adds when it is missing, as in step 1. The CLI and the web UI
+  keep the login they had. GitHub sign-in as in step 1 would also need
+  `URL/auth/callback/github` among the App's callback URLs, `URL` being `url` under
+  `[server.web]`; this has not been tried.
+- **Webhooks.** Leave `[server.integrations.github.webhooks]` unset. With a strategy there
+  Fabro points the App's one webhook URL at this server when it starts, away from whatever
+  else receives the App's events.
+- **The key.** A private key mints tokens for every installation of the App, with all of the
+  App's permissions. Runs still get tokens for their own repository and the workflow's
+  permissions, but the Fabro host now holds the App's full reach: prefer an App that has
+  little more than fidfab needs.
+- Everything that uses the App posts as `SLUG[bot]`, and shares the installation's rate limit.
 
 What changes under the App:
 
