@@ -24,8 +24,9 @@
 // GitHub moved since the steward's last status check (.fidfab/reviews/pr-head) other than
 // by this checkout's commits.
 //
-// Fabro checkpoints and pushes the stages that follow, so the pushed branch still
-// ends with their (empty) checkpoint commits.
+// Fabro checkpoints and pushes the stages that follow as well, so no stage can leave the
+// pushed branch without their (empty) checkpoint commits. The workflow's run_complete
+// hook takes them off once the run has succeeded (fidfab-history-tree trim, workflow.toml).
 digraph LogicalCommits {
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]

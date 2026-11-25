@@ -28,8 +28,10 @@ a Docker sandbox image and tests. Keep the following in mind.
   node whose class does not decide its level goes in the test's `override` table, as the verify
   and address nodes of the Claude and Codex reviews do (`xhigh`).
 - `tests/test-logical-commits.sh` must pass after any change to `logical-commits.fabro`, its
-  prompt, `fidfab-history-tree` or a workflow graph (`validate-workflows.sh` runs it too). A workflow that imports
-  `pr-steward.fabro` imports `logical-commits.fabro` as the steward's only successor.
+  prompt, `fidfab-history-tree`, a workflow graph or the `[[run.hooks]]` of a `workflow.toml`
+  (`validate-workflows.sh` runs it too). A workflow that imports `pr-steward.fabro` imports
+  `logical-commits.fabro` as the steward's only successor, and its `workflow.toml` carries
+  the `run_complete` hook `fidfab-history-tree trim`.
 - `tests/test-pipeline-order.sh` must pass after any change to a workflow graph or to a prompt
   that addresses a review (`validate-workflows.sh` runs it too). `small`, `medium` and `verify`
   run coverage, the Codex review, the Claude review, the CodeRabbit review, the security review,
@@ -110,7 +112,17 @@ a Docker sandbox image and tests. Keep the following in mind.
   when the node changed nothing) and pushes `fabro/run/<id>` each time, without updating
   `origin/<branch>` in the sandbox: `git fetch` before comparing with the remote. No node
   attribute turns this off (`[run.run_branch] push` is run-wide), so a stage that rewrites
-  history must force-push it, and the nodes after it still add their checkpoints.
+  history must force-push it, and the nodes after it still add their checkpoints. Each
+  `workflow.toml` takes those off again with a blocking `run_complete` hook
+  (`fidfab-history-tree trim`).
+- `[[run.hooks]]` in `workflow.toml` reach the run, and command hooks run in the sandbox, in
+  `/workspace`, with a stage's git credentials (probe runs on 2026-11-25, Fabro 0.423).
+  `stage_complete` fires after the node's checkpoint is pushed; `run_complete`, then
+  `sandbox_cleanup`, fire after the last checkpoint push with the sandbox still up, and
+  Fabro pushes nothing after them. `checkpoint_saved` never runs (`fabro validate` warns).
+  `FABRO_RUN_ID` is `petri` in a hook, not the run ID. A hook's output is not kept, and a
+  blocking `run_complete` hook that exits non-zero does not fail the run: `fabro events`
+  has `block: hook exited with code N` in a `run.note.recorded` event of kind `hook`.
 - Edge conditions can read the run context (`condition="context.KEY=value"`). The
   `context_updates` of a routing node are run-wide: a later imported component sees the latest
   value, and a missing key takes the unconditional edge. `logical-commits.fabro` routes on

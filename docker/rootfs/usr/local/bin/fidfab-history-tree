@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # fidfab-history-tree — hold the history rewrite (logical-commits.fabro) to the reviewed code.
 #
-# Usage: fidfab-history-tree record | verify
+# Usage: fidfab-history-tree record | verify | trim
 #
 #   record  before the rewrite: `git fetch origin`, then exit non-zero unless origin/<branch>
 #           descends from the head the steward's last status check cleared
@@ -15,6 +15,16 @@
 #           rewrite agent holds the run's GitHub token and is told to force-push; its prompt
 #           keeps the tree, but only this check makes sure it did, also when the agent failed or
 #           timed out mid-way.
+#   trim    when the run has succeeded (the workflows' run_complete hook): Fabro committed and
+#           pushed an empty checkpoint for every stage after the rewrite. Run verify again, then
+#           move <branch> on GitHub back to the last commit that is not such a checkpoint (one
+#           parent, the parent's tree, subject `fabro(...): ...`) or that predates the rewrite
+#           (is in the commit GitHub had at record time), with a lease on what GitHub holds,
+#           which must be HEAD or one of the checkpoints dropped. Nothing is done without a
+#           record (no rewrite ran), while the commit GitHub had at record time is still in HEAD
+#           (the rewrite left the history as it was), or when GitHub already ends on the commit
+#           kept. trim fails, changing nothing, when the commit GitHub had at record time is not
+#           in the checkout, or when GitHub holds anything else.
 #
 # Commits are compared by tree only, so moving, squashing and rewording pass; any change to
 # the code, including a file left in the work tree that Fabro's checkpoint then committed and
@@ -82,5 +92,46 @@ case "${1:-}" in
     [[ $status -eq 0 ]] && echo "history tree unchanged: $want ($branch, HEAD and GitHub)"
     exit $status
     ;;
-  *) echo "usage: fidfab-history-tree record | verify" >&2; exit 2 ;;
+  trim)
+    [[ -s "$file" ]] || { echo "nothing to trim: no rewrite was recorded"; exit 0; }
+    "$0" verify >/dev/null  # the same conditions, and its fetch
+    { read -r _; read -r branch; read -r remote; } < "$file" || true
+    # $remote bounds the scan: without it, the checkpoints Fabro added after the rewrite
+    # cannot be told from the history before it.
+    git cat-file -e "$remote^{commit}" 2>/dev/null || {
+      echo "FAIL: $remote, which GitHub had before the rewrite, is not in this checkout: cannot tell where the rewrite began" >&2
+      exit 1
+    }
+    if git merge-base --is-ancestor "$remote" HEAD; then
+      echo "nothing to trim: the rewrite left the history as it was"
+      exit 0
+    fi
+    # $remote is not in HEAD, so every commit of HEAD from before the rewrite is in $remote:
+    # the scan stops at the first one, even when it is an empty checkpoint the rewritten
+    # history ends on (a branch collapsed onto its base, say). An error counts as one too.
+    predates() { git merge-base --is-ancestor "$1" "$remote" || (($? != 1)); }
+    head="$(git rev-parse HEAD)"
+    keep="$head"
+    while read -r _ parent more < <(git rev-list --parents -n 1 "$keep") &&
+      [[ -n "$parent" && -z "$more" && "$(tree "$keep")" == "$(tree "$parent")" &&
+        "$(git log -1 --format=%s "$keep")" == 'fabro('*'): '* ]] && ! predates "$keep"; do
+      keep="$parent"
+    done
+    [[ "$keep" != "$head" ]] || { echo "nothing to trim: $branch does not end with empty checkpoints"; exit 0; }
+    # What GitHub holds (verify's fetch, which checked that it is there) must be HEAD or one
+    # of the checkpoints the scan walked over: then dropping it loses nothing. It is HEAD
+    # unless Fabro's last push did not land, or $keep when Fabro does not push its
+    # checkpoints or trim ran before. Anything else is a commit pushed by someone else.
+    github="$(git rev-parse "refs/remotes/origin/$branch")"
+    [[ "$github" != "$keep" ]] || { echo "nothing to trim: GitHub already ends on $keep"; exit 0; }
+    if ! git merge-base --is-ancestor "$keep" "$github" || ! git merge-base --is-ancestor "$github" "$head"; then
+      echo "FAIL: origin/$branch ($github) is neither HEAD nor an empty checkpoint after $keep: someone else pushed, nothing trimmed" >&2
+      exit 1
+    fi
+    # The lease: GitHub must still hold that commit, so a commit pushed meanwhile is never dropped.
+    git push -q --force-with-lease="$branch:$github" origin "$keep:refs/heads/$branch"
+    n="$(git rev-list --count "$keep..$github")"
+    echo "history trimmed: $n empty checkpoint$([[ $n == 1 ]] || echo s) dropped, $branch is $keep on GitHub"
+    ;;
+  *) echo "usage: fidfab-history-tree record | verify | trim" >&2; exit 2 ;;
 esac
