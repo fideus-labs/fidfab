@@ -495,6 +495,9 @@ h trim >/dev/null || fail "history-tree: trim fails when the history was not rew
 [[ "$(on_github)" == "$(g rev-parse HEAD)" ]] || fail "history-tree: trim moved a branch the rewrite left as it was"
 g checkout -q -b elsewhere
 h verify >/dev/null 2>&1 && fail "history-tree: verify passes on a branch other than the recorded one"
+pushed="$(on_github)"
+h trim >/dev/null 2>&1 && fail "history-tree: trim passes on a branch other than the recorded one"
+[[ "$(on_github)" == "$pushed" ]] || fail "history-tree: trim moved the recorded branch from another one"
 g checkout -q topic
 g push -q origin --delete topic
 h verify >/dev/null 2>&1 && fail "history-tree: verify passes when the pushed branch disappeared"
@@ -502,6 +505,7 @@ h record >/dev/null 2>&1 && fail "history-tree: record passes a branch not on Gi
 g rev-parse "HEAD^{tree}" > "$fix/work/.fidfab/reviews/history-tree"
 h verify >/dev/null 2>&1 && fail "history-tree: verify accepts a record without branch and remote"
 rc=0; h bogus >/dev/null 2>&1 || rc=$?; [[ $rc -eq 2 ]] || fail "history-tree: unknown command not rejected with 2"
+[[ "$(h bogus 2>&1)" == *'record | verify | trim'* ]] || fail "history-tree: usage does not name trim"
 
 [[ $status -eq 0 ]] && echo "logical commits: $workflows workflows OK"
 exit $status
