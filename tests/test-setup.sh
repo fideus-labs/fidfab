@@ -212,7 +212,7 @@ secret rm --no-upgrade-check GITHUB_TOKEN"
 want=$'# kept\n[server.integrations.github]\nstrategy = "app"\napp_id = "123456"\nclient_id = "Iv1.abc"\nslug = "acme-bot"\n\n# web\n[server.web]\nenabled = true'
 if [[ "$(cat "$tmp/apphome/.fabro/settings.toml")" == "$want" &&
       "$out" == *"https://github.com/organizations/acme/settings/apps/acme-bot and"* &&
-      "$out" == *"https://github.com/apps/acme-bot/installations/new"* ]]; then
+      "$out" == *"https://github.com/apps/acme-bot/installations/new"* && "$out" != *WARNING* ]]; then
   echo "ok   github-app points the settings at the adopted App and names its pages"
 else echo "FAIL github-app adopted settings: $(cat "$tmp/apphome/.fabro/settings.toml") / $out"; fail=1; fi
 # A restart that fails may mean the server could not read the settings: the gh token stays.
@@ -221,6 +221,13 @@ out="$(FABRO_STUB_FAIL_RESTART=1 GH_STUB_APP="123456 Iv1.abc acme" adopt "$tmp/k
 check "github-app keeps the gh token when the server does not restart" "$stored"
 if [[ "$out" == *"WARNING: fabro server restart failed"* ]]; then echo "ok   ... and says so"
 else echo "FAIL github-app restart failure went unreported: $out"; fail=1; fi
+# The switch is meant to take the gh token out of the vault: one still listed is reported.
+token_settings
+out="$(FABRO_STUB_SECRETS=GITHUB_TOKEN GH_STUB_APP="123456 Iv1.abc acme" adopt "$tmp/key.pem")"
+if [[ "$out" == *"WARNING: could not confirm that GITHUB_TOKEN left the vault"* ]]; then
+  echo "ok   github-app says when the gh token is still in the vault"
+else echo "FAIL github-app left the gh token in the vault unreported: $out"; fail=1; fi
+: > "$FIDFAB_TEST_LOG"
 # Settings without the table get it appended; a personal App's page; a key path under ~.
 printf '[server.web]\nenabled = true\n' > "$tmp/apphome/.fabro/settings.toml"
 cp "$tmp/key.pem" "$tmp/apphome/key.pem"

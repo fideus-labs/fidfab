@@ -150,7 +150,7 @@ use_github_app() {
 # generated for this server into the vault. [server.auth] is left alone.
 # Call it bare: under `||` or `if`, set -e would not stop it at a secret that failed to store.
 adopt_github_app() {
-  local slug="$1" app pem id client org
+  local slug="$1" app pem id client org left
   [[ "$slug" =~ ^[A-Za-z0-9-]+$ ]] || { note "Not an App slug: $slug"; return 1; }
   # Its ID, client ID and, for an organization's App, the organization its settings page is under.
   app="$(gh api "apps/$slug" --jq '"\(.id) \(.client_id // "") \(.owner | if .type == "Organization" then .login else "" end)"' 2>/dev/null || true)"
@@ -177,6 +177,12 @@ adopt_github_app() {
   # the server runs on the new settings: a restart that fails can mean it could not read them.
   if fabro server restart --no-upgrade-check >/dev/null 2>&1; then
     fabro secret rm --no-upgrade-check GITHUB_TOKEN >/dev/null 2>&1 || true
+    # rm fails too when the vault had no such secret, so ask the vault instead of trusting its status.
+    if ! left="$(fabro secret list --no-upgrade-check --json 2>/dev/null)" \
+        || grep -qE '"name": *"GITHUB_TOKEN"' <<<"$left"; then
+      note "WARNING: could not confirm that GITHUB_TOKEN left the vault. Check fabro secret list and"
+      note "remove the token strategy's secret with fabro secret rm GITHUB_TOKEN."
+    fi
   else
     note "WARNING: fabro server restart failed; run it yourself so the server reads the change, then"
     note "fabro secret rm GITHUB_TOKEN: the token strategy's secret is still in the vault."

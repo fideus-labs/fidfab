@@ -146,7 +146,8 @@ then:
 A failure before step 4 leaves Fabro on the token strategy: run the step again. If the restart
 fails, the settings already name the App and `GITHUB_TOKEN` is kept. The step warns, and a
 rerun does not try again: run `fabro server restart` yourself, which says so when the settings
-are what it cannot read, then `fabro secret rm GITHUB_TOKEN`.
+are what it cannot read, then `fabro secret rm GITHUB_TOKEN`. The step also warns when it
+cannot confirm that the secret left the vault; the same command removes it.
 
 By hand, with `KEY.pem` the downloaded key:
 
@@ -167,11 +168,10 @@ client_id = "Iv1.abc123def"
 slug = "SLUG"
 ```
 
-Restart the server, and remove the token strategy's secret once it runs on the App:
+Restart the server, and remove the token strategy's secret only if it restarted on the App:
 
 ```bash
-fabro server restart
-fabro secret rm GITHUB_TOKEN
+fabro server restart && fabro secret rm GITHUB_TOKEN
 ```
 
 Steps 2 to 4 follow as for a new App. What differs:
