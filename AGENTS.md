@@ -68,6 +68,11 @@ a Docker sandbox image and tests. Keep the following in mind.
   classify ACP failures, and its retries wait at most 60 s. A run keeps the secrets it started
   with (`resume` too); another account takes `fabro secret set` and `fabro fork`, whose fresh
   sandbox the wrappers re-credential from the environment.
+- A node that fails three times in a run with the same error ends the run, even when an
+  `outcome=failed` edge leads on (Fabro's circuit breaker, "deterministic failure cycle detected
+  ... repeated 3 times (limit 3)"; seen on 2026-11-25 when a usage-limited Codex review failed on
+  three versions in a row). A fallback inside a loop must stop calling the tool that failed:
+  `codex-review.fabro` routes on `context.walls_codex`, which `fidfab-walls down codex` sets.
 - A fork or a rewind clones the run branch at the checkpoint into a fresh workspace: nothing
   outside git survives, `.fidfab/` and `.git/info/exclude` included. `fidfab-state` carries
   `.fidfab/` in git notes. Hooks (Fabro 0.403, probe runs on 2026-11-24):

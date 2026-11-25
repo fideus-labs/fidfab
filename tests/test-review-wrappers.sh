@@ -91,9 +91,9 @@ check "coderabbit review: from the base branch when the merge base is no commit 
 # fidfab-walls: a wall is down when CodeRabbit is logged out or no independent reviewer answers.
 walls() { # HOME WALLS_THAT_ANSWER...: the verdict's exit status and its reviewer line
   local home="$1"; shift
-  run "$home" -- fidfab-walls coderabbit
+  run "$home" -- fidfab-walls coderabbit >/dev/null
   for w in "$@"; do mkdir -p "$home/.fidfab/walls"; echo ok > "$home/.fidfab/walls/$w"; done
-  for w in codex deepseek; do [[ -f "$home/.fidfab/walls/$w" ]] || run "$home" -- fidfab-walls down "$w"; done
+  for w in codex deepseek; do [[ -f "$home/.fidfab/walls/$w" ]] || run "$home" -- fidfab-walls down "$w" >/dev/null; done
   run "$home" -- fidfab-walls verdict >/dev/null && echo up || echo down
   grep 'Independent review by' "$home/.fidfab/reviews/preflight.md"
 }
@@ -102,8 +102,12 @@ check "walls: all answer" "$(walls "$tmp/w1" codex deepseek)" "$(printf 'up\n- I
 check "walls: CodeRabbit logged out is a wall down" "$(walls "$tmp/w2" codex deepseek | head -1)" "down"
 check "walls: Codex down, DeepSeek reviews in its place" "$(walls "$tmp/w3" deepseek)" "$(printf 'up\n- Independent review by: DeepSeek')"
 check "walls: no independent reviewer is a wall down" "$(walls "$tmp/w4")" "$(printf 'down\n- Independent review by: none')"
-echo ok > "$tmp/w4/.fidfab/walls/codex"; run "$tmp/w4" -- fidfab-walls coderabbit
+echo ok > "$tmp/w4/.fidfab/walls/codex"
+check "walls: a fresh check sets both reviewers up in the run context" "$(run "$tmp/w4" -- fidfab-walls coderabbit)" \
+  '{"context_updates":{"walls_codex":"up","walls_deepseek":"up"}}'
 check "walls: a re-check never reads an earlier answer" "$(ls "$tmp/w4/.fidfab/walls")" "coderabbit"
+check "walls: Codex down is set in the run context, for codex-review.fabro" \
+  "$(run "$tmp/w4" -- fidfab-walls down codex)" '{"context_updates":{"walls_codex":"down"}}'
 run "$tmp/w4" -- fidfab-walls continued
 check "walls: running with a wall down is recorded" "$(tail -1 "$tmp/w4/.fidfab/reviews/preflight.md")" \
   "**A person chose to run with the walls above down.**"

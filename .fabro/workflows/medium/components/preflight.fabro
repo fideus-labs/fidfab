@@ -3,19 +3,21 @@
 // Codex and DeepSeek answering. Their state goes to .fidfab/reviews/preflight.md. A wall is
 // down when CodeRabbit is (Claude's built-in review would stand in for it) or when neither
 // Codex nor DeepSeek answers (no independent review): the run then stops at a gate. Codex
-// alone down is only recorded, since DeepSeek reviews in its place (codex-review.fabro).
+// alone down is only recorded, since DeepSeek reviews in its place (codex-review.fabro), and
+// set in context.walls_codex, which sends every review of the run to DeepSeek directly.
 digraph Preflight {
   start [shape=Mdiamond, label="Start"]
   exit  [shape=Msquare,  label="Exit"]
 
-  coderabbit    [label="CodeRabbit logged in?", script="fidfab-walls coderabbit", retry_policy="none"]
+  coderabbit    [label="CodeRabbit logged in?", script="fidfab-walls coderabbit", retry_policy="none",
+                 output_schema="routing"]
   codex         [label="Codex answers? (Codex terra)", class="codex terra verify",
                  backend="acp", acp.command="fidfab-codex-acp --model terra --effort medium",
                  prompt="@prompts/preflight-codex.md", retry_policy="none"]
-  codex_down    [label="Codex did not answer", script="fidfab-walls down codex"]
+  codex_down    [label="Codex did not answer", script="fidfab-walls down codex", output_schema="routing"]
   deepseek      [label="DeepSeek answers?", class="deepseek verify", model="deepseek-v4-pro", provider="deepseek",
                  reasoning_effort="medium", prompt="@prompts/preflight-deepseek.md", retry_policy="none"]
-  deepseek_down [label="DeepSeek did not answer", script="fidfab-walls down deepseek"]
+  deepseek_down [label="DeepSeek did not answer", script="fidfab-walls down deepseek", output_schema="routing"]
   verdict       [label="Are the walls up?", script="fidfab-walls verdict", retry_policy="none"]
   gate          [shape=hexagon,
                  label="A wall is down before the run (see the verdict above): CodeRabbit is not logged in, or neither Codex nor DeepSeek answers. Re-check once it is fixed, or run with it down, which .fidfab/reviews/preflight.md and the report will say. Typed text re-checks."]

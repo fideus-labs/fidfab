@@ -11,6 +11,11 @@
 # answer. A wall is down when CodeRabbit is not logged in (Claude's built-in review would stand
 # in for it), or when neither Codex nor DeepSeek answers (no independent review). Codex alone
 # down is only recorded: DeepSeek then reviews in its place.
+#
+# `coderabbit` and `down` print a Fabro routing object (output_schema="routing") that sets
+# context.walls_<wall>: "up" for both on a fresh check, "down" for the wall that did not answer.
+# codex-review.fabro reads context.walls_codex to go straight to DeepSeek once Codex is down,
+# since Fabro ends a run whose node fails three times with the same error.
 set -euo pipefail
 
 [[ -f .fidfab/run.env ]] || fidfab-state restore || true   # a fork starts without .fidfab/
@@ -23,10 +28,12 @@ case "${1:-}" in
   coderabbit)
     rm -f "$walls/codex" "$walls/deepseek"  # a re-check never reads an earlier answer
     if fidfab-coderabbit available >/dev/null 2>&1; then echo ok; else echo down; fi > "$walls/coderabbit"
+    echo '{"context_updates":{"walls_codex":"up","walls_deepseek":"up"}}'
     ;;
   down)
     [[ "${2:-}" == codex || "${2:-}" == deepseek ]] || { echo "fidfab-walls: down codex|deepseek" >&2; exit 64; }
     echo down > "$walls/$2"
+    printf '{"context_updates":{"walls_%s":"down"}}\n' "$2"
     ;;
   verdict)
     coderabbit=$(state coderabbit) codex=$(state codex) deepseek=$(state deepseek) independent=none
@@ -41,5 +48,5 @@ case "${1:-}" in
     printf '\n**A person chose to run with the walls above down.**\n' >> "$record"
     ;;
   *)
-    sed -n '2,13p' "$0"; exit 64 ;;
+    sed -n '2,19p' "$0"; exit 64 ;;
 esac
