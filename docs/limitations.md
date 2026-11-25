@@ -9,14 +9,16 @@
   vendored per workflow (`scripts/sync-components.sh`). Nested imports (a component importing
   a component) are avoided for the same reason.
 - `fabro graph` needs a ready LLM provider on the server before it renders.
-- The history rewrite cannot remove the checkpoint commits of the nodes that run after it: a
-  rewritten pull request branch still ends with a few empty `fabro(...)` commits
-  ([Commit history](workflows.md#commit-history)).
-- The history rewrite has not run in a live Fabro run yet. A local run (Fabro 0.415) shows the
-  next checkpoint committed on top of a rewritten branch, but local runs do not push, so it is
-  not seen yet that Fabro's push after the stage is the plain fast-forward the stage relies on.
-  If it is not, the code on GitHub is still the reviewed tree: the run ends as
-  `publish_failed`, or the branch gets its checkpoint history back.
+- The history rewrite cannot keep Fabro from committing and pushing the empty `fabro(...)`
+  checkpoints of the nodes that run after it; only the workflows' `run_complete` hook
+  (`fidfab-history-tree trim`) takes them off again. A rewritten pull request branch keeps
+  them when the hook fails, with an image built before the helper had `trim`, and in a
+  workflow of your own without the hook ([Commit history](workflows.md#commit-history)).
+- The history rewrite has run in live runs (pull requests #28 and #31): Fabro committed and
+  pushed the next checkpoints on top of the rewritten branch, which kept its rewritten
+  commits. The `trim` hook has not run in a live run yet. Probe runs (Fabro 0.423) showed when
+  and where a `run_complete` hook runs and that a failing one does not fail the run, but not
+  this hook on a rewritten branch.
 - `fabro run` ignores `[run.environment] id` in `workflow.toml` and uses the server's `default`
   environment unless `--environment fidfab` is passed (Fabro 0.396); an unknown id is not an
   error either. `fabro inspect <run>` shows the resolved image under `run.environment.image`.

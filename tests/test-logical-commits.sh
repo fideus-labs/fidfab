@@ -5,8 +5,8 @@
 # component and to nothing else, so no pull request keeps its per-stage checkpoint history.
 # The stage is Claude opus at medium effort, gets no earlier stage output in its preamble
 # (fidelity="truncate"), and its prompt keeps the commands that make the rewrite safe.
-# Each built-in workflow's run_complete hook then takes the checkpoints of the stages after
-# the rewrite off the pushed branch (fidfab-history-tree trim).
+# The run_complete hook in the workflow.toml of each of these workflows then takes the
+# checkpoints of the stages after the rewrite off the pushed branch (fidfab-history-tree trim).
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$here"
@@ -199,6 +199,127 @@ FAIL: grouped.fabro: an edge the scanner cannot read: history -> {steward}
 seen grouped.fabro"
 [[ "$got" == "$want" ]] || { echo "FAIL: scanner self-test; got:" >&2; echo "$got" >&2; exit 1; }
 
+# has_trim_hook <workflow.toml>: one [[run.hooks]] table sets event "run_complete", script
+# "fidfab-history-tree trim" and blocking true. Each table becomes one line of its settings
+# ("key = value;"), with comment lines and trailing comments dropped, so the three settings
+# must be live ones of the same hook, and each must be a whole key.
+# shortcut: no multi-line strings or arrays in a hook table; a "#" after a space inside a
+# string cuts it short (the check then fails, it does not pass).
+has_trim_hook() {
+  awk '/^[[:space:]]*\[/ { if (on) print ""; on = /^[[:space:]]*\[\[[[:space:]]*run\.hooks[[:space:]]*\]\]/; next }
+       on && !/^[[:space:]]*(#|$)/ {
+         sub(/[[:space:]]+#.*$/, ""); sub(/^[[:space:]]+/, ""); gsub(/[[:space:]]+/, " "); printf "%s;", $0
+       }
+       END { if (on) print "" }' "$1" |
+    grep -E '(^|;)event = "run_complete";' | grep -E '(^|;)script = "fidfab-history-tree trim";' |
+    grep -qE '(^|;)blocking = true;'
+}
+# check_hooks <workflow.fabro...>: a "FAIL: ..." line for every workflow whose workflow.toml
+# lacks the hook.
+check_hooks() {
+  local f
+  for f in "$@"; do
+    f="$(dirname "$f")/workflow.toml"
+    has_trim_hook "$f" 2>/dev/null || echo "FAIL: $f lacks the blocking run_complete hook fidfab-history-tree trim"
+  done
+}
+# Self-test on fixtures: the layout the workflows use passes, and so does the hook among other
+# tables; a setting commented out, a key that only ends in the name, settings split over two
+# hooks or put in another table, and a missing workflow.toml fail.
+toml() { mkdir -p "$fix/hooks/$1"; printf '%s\n' "$2" > "$fix/hooks/$1/workflow.toml"; }
+toml ok '[run.clone]
+enabled = true
+
+# Fabro checkpoints the stages after the rewrite.
+[[run.hooks]]
+id       = "fidfab-trim-checkpoints"
+event    = "run_complete"
+script   = "fidfab-history-tree trim"
+blocking = true  # the push must be through before the sandbox goes'
+toml among '[[run.hooks]]
+event = "stage_complete"
+script = "true"
+
+  [[run.hooks]]  # indented, as TOML allows
+  event = "run_complete"
+  script = "fidfab-history-tree trim"
+  blocking = true
+
+[run.environment.env]
+blocking = false'
+toml offblocking '[[run.hooks]]
+event = "run_complete"
+script = "fidfab-history-tree trim"
+# blocking = true
+blocking = false'
+toml offscript '[[run.hooks]]
+event = "run_complete"
+  # script = "fidfab-history-tree trim"
+script = "true"
+blocking = true'
+toml suffix '[[run.hooks]]
+event = "run_complete"
+script = "fidfab-history-tree trim"
+nonblocking = true'
+toml suffixevent '[[run.hooks]]
+on_event = "run_complete"
+event = "stage_complete"
+script = "fidfab-history-tree trim"
+blocking = true'
+toml suffixscript '[[run.hooks]]
+event = "run_complete"
+prescript = "fidfab-history-tree trim"
+script = "true"
+blocking = true'
+toml split '[[run.hooks]]
+event = "run_complete"
+script = "fidfab-history-tree trim"
+  [[run.hooks]]
+event = "stage_complete"
+blocking = true'
+toml othertable '[[run.hooks]]
+event = "run_complete"
+script = "fidfab-history-tree trim"
+[run.hooks.options]
+blocking = true'
+mkdir -p "$fix/hooks/missing"
+got="$(cd "$fix/hooks" && check_hooks ok/workflow.fabro among/workflow.fabro offblocking/workflow.fabro \
+  offscript/workflow.fabro suffix/workflow.fabro suffixevent/workflow.fabro \
+  suffixscript/workflow.fabro split/workflow.fabro othertable/workflow.fabro \
+  missing/workflow.fabro)"
+want="FAIL: offblocking/workflow.toml lacks the blocking run_complete hook fidfab-history-tree trim
+FAIL: offscript/workflow.toml lacks the blocking run_complete hook fidfab-history-tree trim
+FAIL: suffix/workflow.toml lacks the blocking run_complete hook fidfab-history-tree trim
+FAIL: suffixevent/workflow.toml lacks the blocking run_complete hook fidfab-history-tree trim
+FAIL: suffixscript/workflow.toml lacks the blocking run_complete hook fidfab-history-tree trim
+FAIL: split/workflow.toml lacks the blocking run_complete hook fidfab-history-tree trim
+FAIL: othertable/workflow.toml lacks the blocking run_complete hook fidfab-history-tree trim
+FAIL: missing/workflow.toml lacks the blocking run_complete hook fidfab-history-tree trim"
+[[ "$got" == "$want" ]] || { echo "FAIL: hook check self-test; got:" >&2; echo "$got" >&2; exit 1; }
+
+# check_workflows <workflow.fabro...>: check_wiring, then check_hooks on every workflow it saw
+# import the steward. The stages after the rewrite are checkpointed and pushed too, and
+# workflow.toml is per workflow, so each one that imports the steward carries the hook.
+check_workflows() {
+  local line stewarded=()
+  while read -r line; do
+    [[ "$line" == "seen "* ]] && stewarded+=("${line#seen }")
+    printf '%s\n' "$line"
+  done < <(check_wiring "$@")
+  check_hooks ${stewarded[@]+"${stewarded[@]}"}
+}
+# Self-test: a workflow of any name that imports the steward needs the hook; one that does not
+# import it needs no workflow.toml.
+mkdir -p "$fix/wf/hooked" "$fix/wf/mine" "$fix/wf/plain"
+cp "$fix/ok.fabro" "$fix/wf/hooked/workflow.fabro"; cp "$fix/hooks/ok/workflow.toml" "$fix/wf/hooked/"
+cp "$fix/ok.fabro" "$fix/wf/mine/workflow.fabro"
+cp "$fix/none.fabro" "$fix/wf/plain/workflow.fabro"
+got="$(cd "$fix/wf" && check_workflows hooked/workflow.fabro mine/workflow.fabro plain/workflow.fabro)"
+want="seen hooked/workflow.fabro
+seen mine/workflow.fabro
+FAIL: mine/workflow.toml lacks the blocking run_complete hook fidfab-history-tree trim"
+[[ "$got" == "$want" ]] || { echo "FAIL: workflow check self-test; got:" >&2; echo "$got" >&2; exit 1; }
+
 status=0
 fail() { echo "FAIL: $*" >&2; status=1; }
 
@@ -210,16 +331,9 @@ while read -r line; do
     "seen "*) workflows=$((workflows + 1)); seen="$seen ${line#seen } " ;;
     *) fail "${line#FAIL: }" ;;
   esac
-done < <(check_wiring .fabro/workflows/*/workflow.fabro)
+done < <(check_workflows .fabro/workflows/*/workflow.fabro)
 for w in small medium large verify; do
   [[ "$seen" == *" .fabro/workflows/$w/workflow.fabro "* ]] || fail "$w: the workflow does not import the PR steward"
-  # The stages after the rewrite are checkpointed and pushed too: a blocking run_complete
-  # hook trims them (workflow.toml is per workflow, so each one carries the hook). One line
-  # per [[run.hooks]] table, so the three settings must be those of the same hook.
-  awk '/^\[/ { if (on) print ""; on = /^\[\[run\.hooks\]\]/; next }
-       on { sub(/ +#.*$/, ""); gsub(/ +/, " "); printf "%s;", $0 }' ".fabro/workflows/$w/workflow.toml" |
-    grep -F 'event = "run_complete";' | grep -F 'script = "fidfab-history-tree trim";' | grep -qF 'blocking = true;' ||
-    fail "$w: workflow.toml lacks the blocking run_complete hook fidfab-history-tree trim"
 done
 
 # The stage: one agent node, Claude opus at medium effort, no preamble from earlier stages.
@@ -464,14 +578,43 @@ g commit -q --allow-empty -m 'Empty on purpose'; kept="$(g rev-parse HEAD)"
 g commit -q --allow-empty -m 'fabro(r): history.verify (success)'
 g commit -q --allow-empty -m 'fabro(r): exit (success)'
 g push -q origin topic
-# Someone pushed on top meanwhile (the same tree, so verify passes): the lease on HEAD refuses.
-g push -q origin "$(g commit-tree -p HEAD -m theirs "HEAD^{tree}"):refs/heads/topic"
-theirs="$(on_github)"
+# Someone pushed on top meanwhile (the same tree, so verify passes): trim refuses.
+theirs="$(g commit-tree -p HEAD -m theirs "HEAD^{tree}")"
+g push -q origin "$theirs:refs/heads/topic"
 h trim >/dev/null 2>&1 && fail "history-tree: trim passes over a commit pushed meanwhile"
 [[ "$(on_github)" == "$theirs" ]] || fail "history-tree: trim lost a commit pushed meanwhile"
+# ... or pushes it between trim's fetch and its own push: the lease refuses.
+realgit="$(command -v git)"; mkdir -p "$fix/race"
+printf '#!/usr/bin/env bash\n[[ "$1" == push ]] && %q --git-dir=%q update-ref refs/heads/topic "$RACE"\nexec %q "$@"\n' \
+  "$realgit" "$fix/remote.git" "$realgit" > "$fix/race/git"
+chmod +x "$fix/race/git"
 g push -q --force origin topic
-h trim >/dev/null || fail "history-tree: trim failed"
+(cd "$fix/work" && RACE="$theirs" PATH="$fix/race:$PATH" "$ht" trim) >/dev/null 2>&1 &&
+  fail "history-tree: trim passes over a commit pushed after its fetch"
+[[ "$(on_github)" == "$theirs" ]] || fail "history-tree: trim lost a commit pushed after its fetch"
+# GitHub is behind the last commit trim keeps (the same tree): that is not one of the
+# checkpoints it drops, so trim refuses.
+g push -q --force origin "$rewritten:refs/heads/topic"
+h trim >/dev/null 2>&1 && fail "history-tree: trim passes when GitHub is behind the commit it keeps"
+[[ "$(on_github)" == "$rewritten" ]] || fail "history-tree: trim moved a branch GitHub has behind the commit it keeps"
+# Fabro's last checkpoint push did not land: GitHub holds HEAD~1, one of the checkpoints trim
+# drops, and the lease is on that commit.
+g push -q --force origin "HEAD~1:refs/heads/topic"
+out="$(h trim)" || fail "history-tree: trim fails when GitHub lags behind HEAD by a checkpoint"
+[[ "$(on_github)" == "$kept" ]] || fail "history-tree: trim left a lagging GitHub at '$(git -C "$fix/remote.git" log -1 --format=%s topic)', not at the last commit that is no empty checkpoint"
+[[ "$out" == "history trimmed: 1 empty checkpoint dropped, topic is $kept on GitHub" ]] ||
+  fail "history-tree: trim of one checkpoint on GitHub reports: $out"
+# trim runs again (or Fabro did not push its checkpoints): GitHub already ends on the commit
+# trim keeps, so there is nothing to push, and trim says so.
+out="$(h trim)" || fail "history-tree: trim fails when GitHub already ends on the commit it keeps"
+[[ "$(on_github)" == "$kept" ]] || fail "history-tree: trim moved a branch already trimmed"
+[[ "$out" == "nothing to trim: GitHub already ends on $kept" ]] ||
+  fail "history-tree: trim of a branch already trimmed reports: $out"
+g push -q --force origin topic
+out="$(h trim)" || fail "history-tree: trim failed"
 [[ "$(on_github)" == "$kept" ]] || fail "history-tree: trim left GitHub at '$(git -C "$fix/remote.git" log -1 --format=%s topic)', not at the last commit that is no empty checkpoint"
+[[ "$out" == "history trimmed: 2 empty checkpoints dropped, topic is $kept on GitHub" ]] ||
+  fail "history-tree: trim of two checkpoints reports: $out"
 # A merge is never a checkpoint, whatever its subject and tree: dropping it would drop the
 # commits it merged.
 g reset -q --hard "$kept"
